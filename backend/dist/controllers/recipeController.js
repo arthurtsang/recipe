@@ -41,17 +41,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-var __rest = (this && this.__rest) || function (s, e) {
-    var t = {};
-    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
-        t[p] = s[p];
-    if (s != null && typeof Object.getOwnPropertySymbols === "function")
-        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
-            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
-                t[p[i]] = s[p[i]];
-        }
-    return t;
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -112,15 +101,7 @@ function getAllRecipes(req, res) {
             const page = req.query.page ? parseInt(req.query.page, 10) : 1;
             const limit = req.query.limit ? parseInt(req.query.limit, 10) : 12;
             const recipes = yield recipeService.getAllPublicRecipes(q, page, limit);
-            // Map ratings to averageRating for each recipe
-            const mapped = recipes.map((r) => {
-                const averageRating = r.ratings.length
-                    ? r.ratings.reduce((sum, rat) => sum + rat.value, 0) / r.ratings.length
-                    : null;
-                const { ratings } = r, rest = __rest(r, ["ratings"]);
-                return Object.assign(Object.assign({}, rest), { averageRating });
-            });
-            res.json(mapped);
+            res.json(recipes);
         }
         catch (err) {
             console.error(err);
@@ -221,7 +202,7 @@ function getRecipeRatings(req, res) {
             if ((_b = (_a = req.oidc) === null || _a === void 0 ? void 0 : _a.user) === null || _b === void 0 ? void 0 : _b.email) {
                 const dbUser = yield prisma.user.findUnique({ where: { email: req.oidc.user.email.toLowerCase() } });
                 if (dbUser) {
-                    const r = ratings.find((r) => r.userId === dbUser.id);
+                    const r = ratings.find(r => r.userId === dbUser.id);
                     if (r)
                         userRating = r.value;
                 }

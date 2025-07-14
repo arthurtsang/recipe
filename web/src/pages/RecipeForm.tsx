@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Box, Typography, TextField, Button, Paper } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 interface User {
   id: string;
@@ -10,6 +11,7 @@ interface User {
 }
 
 const RecipeForm: React.FC<{ user: User | null }> = ({ user }) => {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
@@ -94,14 +96,14 @@ const RecipeForm: React.FC<{ user: User | null }> = ({ user }) => {
   if (!user) {
     return (
       <Paper sx={{ p: 4, maxWidth: 600, mx: 'auto', width: '100%' }}>
-        <Typography variant="h6" align="center">You must be logged in to add or edit a recipe.</Typography>
+        <Typography variant="h6" align="center">{t('mustBeLoggedIn')}</Typography>
       </Paper>
     );
   }
 
   return (
     <Paper sx={{ p: 4, maxWidth: 600, mx: 'auto', width: '100%' }}>
-      <Typography variant="h5" gutterBottom sx={{ textAlign: 'center', mb: 2 }}>{isEdit ? 'Edit' : 'Add'} Recipe</Typography>
+      <Typography variant="h5" gutterBottom sx={{ textAlign: 'center', mb: 2 }}>{isEdit ? t('editRecipe') : t('addRecipe')}</Typography>
       <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <TextField
           label="Title"

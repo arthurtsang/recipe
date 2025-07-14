@@ -5,6 +5,8 @@ import RecipeDetail from './pages/RecipeDetail';
 import RecipeForm from './pages/RecipeForm';
 import { Container, CssBaseline, AppBar, Toolbar, Typography, Button, Avatar, Menu, MenuItem, IconButton, ListItemIcon } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
+import { useTranslation } from 'react-i18next';
+import i18n from './i18n';
 
 interface User {
   id: string;
@@ -18,6 +20,9 @@ function App() {
   const location = useLocation();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
+  const { t } = useTranslation();
+  const currentLang = i18n.language?.split('-')[0] || 'en';
+  const browserLang = (navigator.language || 'en').split('-')[0];
 
   useEffect(() => {
     fetch('/api/me', { credentials: 'include' }).then(async res => {
@@ -37,6 +42,11 @@ function App() {
     setAnchorEl(null);
   };
 
+  const handleLanguageChange = (lng: string) => {
+    i18n.changeLanguage(lng);
+    handleMenuClose();
+  };
+
   return (
     <>
       <CssBaseline />
@@ -44,12 +54,12 @@ function App() {
         <Container maxWidth="lg">
           <Toolbar disableGutters sx={{ px: 2 }}>
             <Typography variant="h6" sx={{ flexGrow: 1 }}>
-              Recipe App
+              {t('appTitle')}
             </Typography>
-            <Button color="inherit" component={Link} to="/">Home</Button>
+            <Button color="inherit" component={Link} to="/">{t('home')}</Button>
             {user ? (
               <>
-                <Button color="inherit" component={Link} to="/recipes/new">Add Recipe</Button>
+                <Button color="inherit" component={Link} to="/recipes/new">{t('addRecipe')}</Button>
                 <IconButton onClick={handleAvatarClick} sx={{ ml: 2 }} size="small">
                   <Avatar alt={user.name} src={user.picture} />
                 </IconButton>
@@ -62,17 +72,25 @@ function App() {
                   anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
                 >
                   <MenuItem disabled>{user.name || user.email}</MenuItem>
+                  <MenuItem disabled>{t('language')}: {currentLang === 'zh' ? t('chinese') : t('english')}</MenuItem>
+                  {/* Only allow switching if authenticated */}
+                  <MenuItem
+                    onClick={() => handleLanguageChange(currentLang === 'en' ? 'zh' : 'en')}
+                    disabled={currentLang !== browserLang && !user}
+                  >
+                    {currentLang === 'en' ? t('chinese') : t('english')}
+                  </MenuItem>
                   <MenuItem component="a" href="/logout">
                     <ListItemIcon>
                       <LogoutIcon fontSize="small" />
                     </ListItemIcon>
-                    Logout
+                    {t('logout')}
                   </MenuItem>
                 </Menu>
               </>
             ) : (
               <Button color="inherit" href="/auth/google" sx={{ ml: 2 }}>
-                Login
+                {t('login')}
               </Button>
             )}
           </Toolbar>

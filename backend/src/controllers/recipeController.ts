@@ -50,15 +50,7 @@ export async function getAllRecipes(req: Request, res: Response) {
     const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 12;
     const recipes = await recipeService.getAllPublicRecipes(q, page, limit);
-    // Map ratings to averageRating for each recipe
-    const mapped = recipes.map((r: any) => {
-      const averageRating = r.ratings.length
-        ? r.ratings.reduce((sum: number, rat: { value: number }) => sum + rat.value, 0) / r.ratings.length
-        : null;
-      const { ratings, ...rest } = r;
-      return { ...rest, averageRating };
-    });
-    res.json(mapped);
+    res.json(recipes);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch recipes' });
@@ -138,12 +130,12 @@ export async function getRecipeRatings(req: Request, res: Response) {
   try {
     const { id } = req.params;
     const ratings = await prisma.rating.findMany({ where: { recipeId: id } });
-    const avg = ratings.length ? ratings.reduce((sum: number, r: { value: number }) => sum + r.value, 0) / ratings.length : null;
+    const avg = ratings.length ? ratings.reduce((sum, r) => sum + r.value, 0) / ratings.length : null;
     let userRating = null;
     if (req.oidc?.user?.email) {
       const dbUser = await prisma.user.findUnique({ where: { email: req.oidc.user.email.toLowerCase() } });
       if (dbUser) {
-        const r = ratings.find((r: { userId: string }) => r.userId === dbUser.id);
+        const r = ratings.find(r => r.userId === dbUser.id);
         if (r) userRating = r.value;
       }
     }
@@ -171,7 +163,7 @@ export async function rateRecipe(req: Request, res: Response) {
     });
     // Return updated average and user rating
     const ratings = await prisma.rating.findMany({ where: { recipeId: id } });
-    const avg = ratings.length ? ratings.reduce((sum: number, r: { value: number }) => sum + r.value, 0) / ratings.length : null;
+    const avg = ratings.length ? ratings.reduce((sum, r) => sum + r.value, 0) / ratings.length : null;
     res.json({ average: avg, user: value });
   } catch (err) {
     console.error(err);

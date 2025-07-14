@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Paper, Typography, Box, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemButton, ListItemText, Checkbox, FormControlLabel, Rating } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 interface User {
   id: string;
@@ -30,6 +31,7 @@ interface Recipe {
 }
 
 const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
@@ -176,9 +178,9 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     }
   };
 
-  if (loading) return <Typography>Loading recipe...</Typography>;
-  if (error) return <Typography color="error">Error: {error}</Typography>;
-  if (!recipe) return <Typography>Recipe not found.</Typography>;
+  if (loading) return <Typography>{t('loadingRecipe')}</Typography>;
+  if (error) return <Typography color="error">{t('error')}: {error}</Typography>;
+  if (!recipe) return <Typography>{t('recipeNotFound')}</Typography>;
 
   // Fix image URL if it's a relative path
   let imageUrl = editFields?.imageUrl || recipe?.imageUrl;
@@ -187,21 +189,9 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   }
 
   return (
-    <Paper sx={{ p: 4, maxWidth: 700, mx: 'auto' }}>
-      <Button variant="text" onClick={handleBack} sx={{ mb: 2 }}>&larr; Back</Button>
-      <Typography variant="h4" gutterBottom>
-        {isOwner ? (
-          <TextField
-            value={editFields?.title || ''}
-            onChange={e => handleFieldChange('title', e.target.value)}
-            variant="standard"
-            fullWidth
-            InputProps={{ disableUnderline: true, style: { fontSize: 32, fontWeight: 600 } }}
-          />
-        ) : (
-          recipe?.title || ''
-        )}
-      </Typography>
+    <Paper sx={{ p: 4, maxWidth: 900, mx: 'auto', width: '100%' }}>
+      <Button variant="text" onClick={handleBack} sx={{ mb: 2 }}>&larr; {t('back')}</Button>
+      <Typography variant="h4" gutterBottom>{t('recipeDetail')}</Typography>
       {/* Star Rating UI */}
       <Box display="flex" alignItems="center" mb={2}>
         <Rating
@@ -211,7 +201,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           size="large"
         />
         <Typography variant="body2" sx={{ ml: 2 }}>
-          {averageRating ? `Average: ${averageRating.toFixed(2)} / 5` : 'No ratings yet'}
+          {averageRating ? `${t('averageRating')}: ${averageRating.toFixed(2)} / 5` : `${t('noRatingsYet')}`}
         </Typography>
       </Box>
       {imageUrl && <Box mb={2}><img src={imageUrl} alt={editFields?.title || recipe?.title || ''} style={{ maxWidth: 400, width: '100%' }} /></Box>}
@@ -229,7 +219,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           selectedVersion.description
         )}
       </Typography>
-      <Typography variant="h6" mt={2}>Ingredients</Typography>
+      <Typography variant="h6" mt={2}>{t('ingredients')}</Typography>
       <Box component="pre" sx={{ background: '#f5f5f5', p: 2, borderRadius: 1, overflowX: 'auto' }}>
         {isOwner ? (
           <TextField
@@ -244,7 +234,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           selectedVersion.ingredients
         )}
       </Box>
-      <Typography variant="h6" mt={2}>Instructions</Typography>
+      <Typography variant="h6" mt={2}>{t('instructions')}</Typography>
       <Box component="pre" sx={{ background: '#f5f5f5', p: 2, borderRadius: 1, overflowX: 'auto' }}>
         {isOwner ? (
           <TextField
@@ -260,18 +250,18 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
         )}
       </Box>
       <Box sx={{ fontSize: '0.9em', color: 'text.secondary', mt: 2 }}>
-        By: {recipe.user?.name || recipe.user?.email}
+        {t('by')}: {recipe.user?.name || recipe.user?.email}
       </Box>
       {/* Versions List */}
       {versions.length > 1 && (
         <Box mt={3} mb={2} sx={{ position: 'relative' }}>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>Versions:</Typography>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>{t('versions')}:</Typography>
           <Box sx={{ position: 'relative', overflowX: 'auto', maxWidth: '100%' }}>
             <List dense sx={{ display: 'flex', flexDirection: 'row', gap: 1, p: 0, minHeight: 48 }}>
               {versions.map((v: Version, idx: number) => (
                 <ListItem key={v.id || idx} disablePadding sx={{ width: 'auto', minWidth: 120 }}>
                   <ListItemButton selected={idx === selectedVersionIdx} onClick={() => handleSelectVersion(idx)}>
-                    <ListItemText primary={v.name ? v.name : (v.createdAt ? new Date(v.createdAt).toLocaleString() : `Version ${idx + 1}`)} />
+                    <ListItemText primary={v.name ? v.name : (v.createdAt ? new Date(v.createdAt).toLocaleString() : `${t('version')} ${idx + 1}`)} />
                   </ListItemButton>
                 </ListItem>
               ))}
@@ -283,25 +273,25 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       {/* Owner controls */}
       {isOwner && (
         <Box mt={3} display="flex" gap={2}>
-          <Button variant="contained" color="primary" onClick={handleOpenSaveDialog}>Save</Button>
-          <Button variant="outlined" color="error" onClick={() => setDeleteDialogOpen(true)} disabled={deleting}>Delete</Button>
+          <Button variant="contained" color="primary" onClick={handleOpenSaveDialog}>{t('save')}</Button>
+          <Button variant="outlined" color="error" onClick={() => setDeleteDialogOpen(true)} disabled={deleting}>{t('delete')}</Button>
         </Box>
       )}
       {/* Save Dialog */}
       <Dialog open={saveDialogOpen} onClose={() => setSaveDialogOpen(false)}>
-        <DialogTitle>Save Recipe</DialogTitle>
+        <DialogTitle>{t('saveRecipe')}</DialogTitle>
         <DialogContent>
           <FormControlLabel
             control={<Checkbox checked={createNewVersion} onChange={e => setCreateNewVersion(e.target.checked)} />}
-            label="Create new version (recommended)"
+            label={t('createNewVersion')}
           />
           {createNewVersion && (
             <>
-              <Typography gutterBottom>Enter a name for this version:</Typography>
+              <Typography gutterBottom>{t('enterVersionName')}</Typography>
               <TextField
                 autoFocus
                 margin="dense"
-                label="Version Name"
+                label={t('versionName')}
                 type="text"
                 fullWidth
                 value={versionName}
@@ -311,20 +301,20 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setSaveDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleSave} variant="contained">Save</Button>
+          <Button onClick={() => setSaveDialogOpen(false)}>{t('cancel')}</Button>
+          <Button onClick={handleSave} variant="contained">{t('save')}</Button>
         </DialogActions>
       </Dialog>
       {/* Delete Dialog */}
       <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
-        <DialogTitle>Delete</DialogTitle>
+        <DialogTitle>{t('delete')}</DialogTitle>
         <DialogContent>
-          <Typography gutterBottom>Do you want to delete just this version, or the entire recipe?</Typography>
+          <Typography gutterBottom>{t('deleteVersionOrRecipe')}</Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-          <Button onClick={() => handleDelete(false)} color="error" variant="contained">Delete Version</Button>
-          <Button onClick={() => handleDelete(true)} color="error" variant="outlined">Delete Recipe</Button>
+          <Button onClick={() => setDeleteDialogOpen(false)}>{t('cancel')}</Button>
+          <Button onClick={() => handleDelete(false)} color="error" variant="contained">{t('deleteVersion')}</Button>
+          <Button onClick={() => handleDelete(true)} color="error" variant="outlined">{t('deleteRecipe')}</Button>
         </DialogActions>
       </Dialog>
     </Paper>

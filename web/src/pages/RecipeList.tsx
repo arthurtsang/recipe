@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import RecipeCard from '../components/RecipeCard';
 import { Typography, Box, TextField, Button } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 // Define a Recipe type for better type safety
 interface Recipe {
@@ -13,6 +14,7 @@ interface Recipe {
 }
 
 export default function RecipeList() {
+  const { t } = useTranslation();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,23 +73,23 @@ export default function RecipeList() {
         mx: 'auto',
       }}
     >
-      <Typography variant="h4" gutterBottom>Recipes</Typography>
+      <Typography variant="h4" gutterBottom>{t('recipes')}</Typography>
       <Box component="form" onSubmit={handleSubmit} sx={{ mb: 4, display: 'flex', gap: 2, maxWidth: 700, width: '100%', mx: 'auto' }}>
         <TextField
           type="text"
-          label="Search recipes..."
+          label={t('searchPlaceholder')}
           value={search}
           onChange={e => setSearch(e.target.value)}
           variant="outlined"
           size="small"
           fullWidth
         />
-        <Button type="submit" variant="contained">Search</Button>
+        <Button type="submit" variant="contained">{t('search')}</Button>
       </Box>
-      {loading && recipes.length === 0 && <Typography>Loading recipes...</Typography>}
-      {error && <Typography color="error">Error: {error}</Typography>}
+      {loading && recipes.length === 0 && <Typography>{t('loadingRecipes')}</Typography>}
+      {error && <Typography color="error">{t('error', { error })}</Typography>}
       {recipes.length === 0 && !loading ? (
-        <Typography sx={{ textAlign: 'center', mt: 8, width: '100%' }}>No recipes found.</Typography>
+        <Typography sx={{ textAlign: 'center', mt: 8, width: '100%' }}>{t('noRecipesFound')}</Typography>
       ) : (
         <Box
           sx={{
