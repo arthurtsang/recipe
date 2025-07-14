@@ -38,11 +38,12 @@ recipe/
 - [x] Recipe CRUD (title, ingredients, instructions, description, image)
 - [x] Image upload with format validation (browser-supported formats)
 - Recipe categories/tags (AI-assisted)
-- Ratings and comments (kids can log in to rate)
+- [x] Ratings (kids can log in to rate)
+- [ ] Comments
 - [x] Perma-link for each recipe
 - [x] Responsive web design
 - [x] Recipe versioning
-- Localization (i18n)
+- [x] Localization (i18n)
 - [x] PostgreSQL database
 
 ### AI Features

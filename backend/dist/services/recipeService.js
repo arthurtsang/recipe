@@ -8,6 +8,17 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __rest = (this && this.__rest) || function (s, e) {
+    var t = {};
+    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+        t[p] = s[p];
+    if (s != null && typeof Object.getOwnPropertySymbols === "function")
+        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+                t[p[i]] = s[p[i]];
+        }
+    return t;
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getAllPublicRecipes = getAllPublicRecipes;
 exports.getRecipeById = getRecipeById;
@@ -26,7 +37,7 @@ function getAllPublicRecipes(q_1) {
                 { versions: { some: { ingredients: { contains: q, mode: 'insensitive' } } } },
             ];
         }
-        return prisma.recipe.findMany({
+        const recipes = yield prisma.recipe.findMany({
             where,
             select: {
                 id: true,
@@ -49,6 +60,14 @@ function getAllPublicRecipes(q_1) {
             orderBy: { createdAt: 'desc' },
             skip: (page - 1) * limit,
             take: limit,
+        });
+        // Map ratings to averageRating and remove ratings array
+        return recipes.map((r) => {
+            const averageRating = r.ratings.length
+                ? r.ratings.reduce((sum, rat) => sum + rat.value, 0) / r.ratings.length
+                : null;
+            const { ratings } = r, rest = __rest(r, ["ratings"]);
+            return Object.assign(Object.assign({}, rest), { averageRating });
         });
     });
 }

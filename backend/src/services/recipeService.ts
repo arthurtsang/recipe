@@ -11,7 +11,7 @@ export async function getAllPublicRecipes(q?: string, page: number = 1, limit: n
       { versions: { some: { ingredients: { contains: q, mode: 'insensitive' } } } },
     ];
   }
-  return prisma.recipe.findMany({
+  const recipes = await prisma.recipe.findMany({
     where,
     select: {
       id: true,
@@ -34,6 +34,14 @@ export async function getAllPublicRecipes(q?: string, page: number = 1, limit: n
     orderBy: { createdAt: 'desc' },
     skip: (page - 1) * limit,
     take: limit,
+  });
+  // Map ratings to averageRating and remove ratings array
+  return recipes.map((r: any) => {
+    const averageRating = r.ratings.length
+      ? r.ratings.reduce((sum: number, rat: { value: number }) => sum + rat.value, 0) / r.ratings.length
+      : null;
+    const { ratings, ...rest } = r;
+    return { ...rest, averageRating };
   });
 }
 
