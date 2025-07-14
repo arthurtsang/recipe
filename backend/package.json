@@ -1,0 +1,38 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "npm run build && nodemon --watch src --watch prisma --watch ../web/src --ext ts --exec \"npm run build && node dist/index.js\"",
+    "build:ui": "cd ../web && npm install && npm run build",
+    "build:backend": "npx prisma generate && tsc",
+    "postinstall": "npm run build:ui",
+    "build": "npm run build:ui && npm run build:backend"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@mui/icons-material": "^7.2.0",
+    "@prisma/client": "^6.11.1",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.0.13",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.0",
+    "express": "^5.1.0",
+    "express-openid-connect": "^2.18.1",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.1",
+    "pg": "^8.16.3",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.8.3"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.0.0",
+    "nodemon": "^3.1.10"
+  }
+}

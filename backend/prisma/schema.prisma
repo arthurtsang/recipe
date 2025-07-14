@@ -1,0 +1,92 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  name         String?
+  picture      String?
+  oidcProvider String
+  oidcSub      String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  comments     Comment[]
+  ratings      Rating[]
+  recipes      Recipe[]
+}
+
+model Recipe {
+  id               String          @id @default(uuid())
+  userId           String
+  title            String
+  description      String?
+  imageUrl         String?
+  currentVersionId String?         @unique
+  isPublic         Boolean         @default(true)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  comments         Comment[]
+  ratings          Rating[]
+  currentVersion   RecipeVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  user             User            @relation(fields: [userId], references: [id])
+  tags             RecipeTag[]
+  versions         RecipeVersion[] @relation("RecipeVersions")
+}
+
+model RecipeVersion {
+  id            String   @id @default(uuid())
+  recipe        Recipe   @relation("RecipeVersions", fields: [recipeId], references: [id])
+  recipeId      String
+  name   String?  // Version name
+  title         String
+  ingredients   String
+  instructions  String
+  description   String?
+  imageUrl      String?
+  createdAt     DateTime @default(now())
+  aiTags        Tag[]    @relation("VersionTags")
+  currentFor    Recipe?  @relation("CurrentVersion")
+}
+
+model Rating {
+  id        String   @id @default(uuid())
+  userId    String
+  recipeId  String
+  value     Int
+  createdAt DateTime @default(now())
+  recipe    Recipe   @relation(fields: [recipeId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, recipeId])
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  userId    String
+  recipeId  String
+  content   String
+  createdAt DateTime @default(now())
+  recipe    Recipe   @relation(fields: [recipeId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Tag {
+  id       String          @id @default(uuid())
+  name     String          @unique
+  recipes  RecipeTag[]
+  versions RecipeVersion[] @relation("VersionTags")
+}
+
+model RecipeTag {
+  id       String @id @default(uuid())
+  recipeId String
+  tagId    String
+  recipe   Recipe @relation(fields: [recipeId], references: [id])
+  tag      Tag    @relation(fields: [tagId], references: [id])
+}
