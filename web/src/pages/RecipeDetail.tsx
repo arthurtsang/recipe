@@ -191,7 +191,51 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   return (
     <Paper sx={{ p: 4, maxWidth: 900, mx: 'auto', width: '100%' }}>
       <Button variant="text" onClick={handleBack} sx={{ mb: 2 }}>&larr; {t('back')}</Button>
-      <Typography variant="h4" gutterBottom>{t('recipeDetail')}</Typography>
+      {/* Title: editable for owner, static for others */}
+      {isOwner ? (
+        <TextField
+          value={editFields?.title || ''}
+          onChange={e => handleFieldChange('title', e.target.value)}
+          variant="standard"
+          fullWidth
+          InputProps={{ disableUnderline: true, style: { fontSize: 32, fontWeight: 600 } }}
+          sx={{ mb: 2 }}
+        />
+      ) : (
+        <Typography variant="h4" gutterBottom sx={{ mb: 2 }}>
+          {recipe.title}
+        </Typography>
+      )}
+      {/* Image preview */}
+      {imageUrl && <Box mb={2}><img src={imageUrl} alt={editFields?.title || recipe?.title || ''} style={{ maxWidth: 400, width: '100%' }} /></Box>}
+      {/* Image upload for owner, now below the image */}
+      {isOwner && (
+        <Box mb={2}>
+          <Button variant="outlined" component="label">
+            {t('uploadImage', 'Upload Image')}
+            <input
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const formData = new FormData();
+                formData.append('image', file);
+                const res = await fetch('/api/recipes/upload', {
+                  method: 'POST',
+                  body: formData,
+                  credentials: 'include',
+                });
+                const data = await res.json();
+                if (data.url) {
+                  setEditFields(prev => prev ? { ...prev, imageUrl: data.url } : null);
+                }
+              }}
+            />
+          </Button>
+        </Box>
+      )}
       {/* Star Rating UI */}
       <Box display="flex" alignItems="center" mb={2}>
         <Rating
@@ -204,7 +248,6 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           {averageRating ? `${t('averageRating')}: ${averageRating.toFixed(2)} / 5` : `${t('noRatingsYet')}`}
         </Typography>
       </Box>
-      {imageUrl && <Box mb={2}><img src={imageUrl} alt={editFields?.title || recipe?.title || ''} style={{ maxWidth: 400, width: '100%' }} /></Box>}
       <Typography variant="subtitle1" color="text.secondary" gutterBottom>
         {isOwner ? (
           <TextField

@@ -11,6 +11,7 @@ model User {
   id           String    @id @default(uuid())
   email        String    @unique
   name         String?
+  alias        String?   @unique
   picture      String?
   oidcProvider String
   oidcSub      String
@@ -41,7 +42,7 @@ model Recipe {
 
 model RecipeVersion {
   id            String   @id @default(uuid())
-  recipe        Recipe   @relation("RecipeVersions", fields: [recipeId], references: [id])
+  recipe        Recipe   @relation("RecipeVersions", fields: [recipeId], references: [id], onDelete: Cascade)
   recipeId      String
   name   String?  // Version name
   title         String

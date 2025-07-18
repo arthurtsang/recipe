@@ -4,11 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "npm run build && nodemon --watch src --watch prisma --watch ../web/src --ext ts --exec \"npm run build && node dist/index.js\"",
+    "dev": "npm run build && concurrently \"npm run dev:backend\" \"npm run dev:ui\"",
+    "dev:backend": "nodemon --watch src --watch prisma --ext ts --exec \"npm run build && node dist/index.js\"",
+    "dev:ui": "chokidar \"../web/src/**/*\" -c \"cd ../web && npm run build\"",
+    "build:backend": "tsc -b",
     "build:ui": "cd ../web && npm install && npm run build",
-    "build:backend": "npx prisma generate && tsc",
-    "postinstall": "npm run build:ui",
-    "build": "npm run build:ui && npm run build:backend"
+    "build": "npm run build:backend && npm run build:ui"
   },
   "keywords": [],
   "author": "",
@@ -33,6 +34,8 @@
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.0.0",
+    "chokidar-cli": "^3.0.0",
+    "concurrently": "^9.2.0",
     "nodemon": "^3.1.10"
   }
 }

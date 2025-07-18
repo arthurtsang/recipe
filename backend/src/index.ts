@@ -9,6 +9,7 @@ import cors from 'cors';
 
 import * as recipeController from './controllers/recipeController';
 import * as userService from './services/userService';
+import tagRoutes from './routes/tags';
 
 // Load environment variables
 dotenv.config();
@@ -106,6 +107,7 @@ app.get('/api/me', requiresAuth(), async (req: any, res) => {
 
 // Protect recipe creation and editing/
 app.use('/api/recipes', recipeRoutes);
+app.use('/api/tags', tagRoutes);
 
 // Serve static files from the React app
 app.use(express.static(path.join(__dirname, '../../web/dist')));

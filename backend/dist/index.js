@@ -54,6 +54,7 @@ const express_openid_connect_1 = require("express-openid-connect");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const cors_1 = __importDefault(require("cors"));
 const userService = __importStar(require("./services/userService"));
+const tags_1 = __importDefault(require("./routes/tags"));
 // Load environment variables
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -140,6 +141,7 @@ app.get('/api/me', (0, express_openid_connect_1.requiresAuth)(), (req, res) => _
 }));
 // Protect recipe creation and editing/
 app.use('/api/recipes', recipes_1.default);
+app.use('/api/tags', tags_1.default);
 // Serve static files from the React app
 app.use(express_1.default.static(path_1.default.join(__dirname, '../../web/dist')));
 // For any route not handled by your API, serve index.html (for React Router)

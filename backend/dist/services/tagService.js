@@ -9,23 +9,35 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getUserByEmail = getUserByEmail;
-exports.getUserByAlias = getUserByAlias;
-exports.setUserAlias = setUserAlias;
+exports.getAllTags = getAllTags;
+exports.getTagById = getTagById;
+exports.createTag = createTag;
+exports.updateTag = updateTag;
+exports.deleteTag = deleteTag;
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
-function getUserByEmail(email) {
+function getAllTags() {
     return __awaiter(this, void 0, void 0, function* () {
-        return prisma.user.findUnique({ where: { email } });
+        return prisma.tag.findMany();
     });
 }
-function getUserByAlias(alias) {
+function getTagById(id) {
     return __awaiter(this, void 0, void 0, function* () {
-        return prisma.user.findUnique({ where: { alias } });
+        return prisma.tag.findUnique({ where: { id } });
     });
 }
-function setUserAlias(userId, alias) {
+function createTag(name) {
     return __awaiter(this, void 0, void 0, function* () {
-        return prisma.user.update({ where: { id: userId }, data: { alias } });
+        return prisma.tag.create({ data: { name } });
+    });
+}
+function updateTag(id, name) {
+    return __awaiter(this, void 0, void 0, function* () {
+        return prisma.tag.update({ where: { id }, data: { name } });
+    });
+}
+function deleteTag(id) {
+    return __awaiter(this, void 0, void 0, function* () {
+        return prisma.tag.delete({ where: { id } });
     });
 }

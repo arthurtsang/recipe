@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import RecipeCard from '../components/RecipeCard';
-import { Typography, Box, TextField, Button } from '@mui/material';
+import { Typography, Box, TextField, Button, Container } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 
 // Define a Recipe type for better type safety
@@ -91,28 +91,24 @@ export default function RecipeList() {
       {recipes.length === 0 && !loading ? (
         <Typography sx={{ textAlign: 'center', mt: 8, width: '100%' }}>{t('noRecipesFound')}</Typography>
       ) : (
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: {
-              xs: '1fr',
-              sm: '1fr 1fr',
-              md: '1fr 1fr 1fr',
-              lg: '1fr 1fr 1fr 1fr'
-            },
-            gap: { xs: 2, sm: 3, md: 4 },
-            width: '100%',
-            maxWidth: 1400,
-            mx: 'auto',
-            justifyItems: 'center',
-          }}
-        >
-          {recipes.map((recipe, i) => (
-            <div key={recipe.id} ref={i === recipes.length - 1 ? lastRecipeRef : undefined} style={{ width: '100%' }}>
-              <RecipeCard recipe={recipe} />
-            </div>
-          ))}
-        </Box>
+        <Container maxWidth="lg" disableGutters>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
+              gap: { xs: 1, sm: 2, md: 2 },
+              width: '100%',
+              mx: 'auto',
+              justifyItems: 'center',
+            }}
+          >
+            {recipes.map((recipe, i) => (
+              <div key={recipe.id} ref={i === recipes.length - 1 ? lastRecipeRef : undefined} style={{ width: '100%' }}>
+                <RecipeCard recipe={recipe} />
+              </div>
+            ))}
+          </Box>
+        </Container>
       )}
       {loading && recipes.length > 0 && <Typography sx={{ textAlign: 'center', mt: 2 }}>Loading more...</Typography>}
     </Box>

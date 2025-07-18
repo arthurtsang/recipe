@@ -45,9 +45,13 @@ recipe/
 - [x] Recipe versioning
 - [x] Localization (i18n)
 - [x] PostgreSQL database
+- [ ] auto archive to archive.is
 
 ### AI Features
 
+- [ ] chat bot
+- [ ] import from other site -> ai?
+- [ ] transcribe from video 
 - AI-assisted category/tag suggestion
 - Ingredient/instruction extraction from pasted text
 - Recipe suggestions based on preferences/ingredients

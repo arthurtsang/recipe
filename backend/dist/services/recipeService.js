@@ -25,6 +25,8 @@ exports.getRecipeById = getRecipeById;
 exports.createRecipe = createRecipe;
 exports.updateRecipe = updateRecipe;
 exports.deleteRecipe = deleteRecipe;
+exports.searchRecipesByKeywords = searchRecipesByKeywords;
+exports.getRecipesByUserId = getRecipesByUserId;
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
 function getAllPublicRecipes(q_1) {
@@ -171,5 +173,91 @@ function updateRecipe(id, data) {
 function deleteRecipe(id) {
     return __awaiter(this, void 0, void 0, function* () {
         return prisma.recipe.delete({ where: { id } });
+    });
+}
+function searchRecipesByKeywords(keywords_1) {
+    return __awaiter(this, arguments, void 0, function* (keywords, page = 1, limit = 12) {
+        const where = { isPublic: true };
+        if (keywords && keywords.length > 0) {
+            where.OR = keywords.map((kw) => ([
+                { title: { contains: kw, mode: 'insensitive' } },
+                { description: { contains: kw, mode: 'insensitive' } },
+                { versions: { some: { ingredients: { contains: kw, mode: 'insensitive' } } } },
+            ])).flat();
+        }
+        const recipes = yield prisma.recipe.findMany({
+            where,
+            select: {
+                id: true,
+                title: true,
+                description: true,
+                imageUrl: true,
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                    },
+                },
+                createdAt: true,
+                updatedAt: true,
+                ratings: {
+                    select: { value: true }
+                },
+                versions: {
+                    select: {
+                        ingredients: true,
+                        instructions: true,
+                    },
+                    orderBy: { createdAt: 'desc' },
+                    take: 1,
+                },
+            },
+            orderBy: { createdAt: 'desc' },
+            skip: (page - 1) * limit,
+            take: limit,
+        });
+        // Map ratings to averageRating and remove ratings array
+        return recipes.map((r) => {
+            const averageRating = r.ratings.length
+                ? r.ratings.reduce((sum, rat) => sum + rat.value, 0) / r.ratings.length
+                : null;
+            const { ratings } = r, rest = __rest(r, ["ratings"]);
+            return Object.assign(Object.assign({}, rest), { averageRating });
+        });
+    });
+}
+function getRecipesByUserId(userId, isOwner) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const where = { userId };
+        if (!isOwner)
+            where.isPublic = true;
+        const recipes = yield prisma.recipe.findMany({
+            where,
+            select: {
+                id: true,
+                title: true,
+                description: true,
+                imageUrl: true,
+                isPublic: true,
+                tags: { include: { tag: true } },
+                createdAt: true,
+                updatedAt: true,
+                ratings: { select: { value: true } },
+                versions: {
+                    select: { ingredients: true, instructions: true },
+                    orderBy: { createdAt: 'desc' },
+                    take: 1,
+                },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+        return recipes.map((r) => {
+            const averageRating = r.ratings.length
+                ? r.ratings.reduce((sum, rat) => sum + rat.value, 0) / r.ratings.length
+                : null;
+            const { ratings } = r, rest = __rest(r, ["ratings"]);
+            return Object.assign(Object.assign({}, rest), { averageRating });
+        });
     });
 }

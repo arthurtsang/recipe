@@ -154,4 +154,87 @@ export async function updateRecipe(id: string, data: {
 
 export async function deleteRecipe(id: string) {
   return prisma.recipe.delete({ where: { id } });
+}
+
+export async function searchRecipesByKeywords(keywords: string[], page: number = 1, limit: number = 12) {
+  const where: any = { isPublic: true };
+  if (keywords && keywords.length > 0) {
+    where.OR = keywords.map((kw) => ([
+      { title: { contains: kw, mode: 'insensitive' } },
+      { description: { contains: kw, mode: 'insensitive' } },
+      { versions: { some: { ingredients: { contains: kw, mode: 'insensitive' } } } },
+    ])).flat();
+  }
+  const recipes = await prisma.recipe.findMany({
+    where,
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      imageUrl: true,
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+      createdAt: true,
+      updatedAt: true,
+      ratings: {
+        select: { value: true }
+      },
+      versions: {
+        select: {
+          ingredients: true,
+          instructions: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    skip: (page - 1) * limit,
+    take: limit,
+  });
+  // Map ratings to averageRating and remove ratings array
+  return recipes.map((r: any) => {
+    const averageRating = r.ratings.length
+      ? r.ratings.reduce((sum: number, rat: { value: number }) => sum + rat.value, 0) / r.ratings.length
+      : null;
+    const { ratings, ...rest } = r;
+    return { ...rest, averageRating };
+  });
+}
+
+export async function getRecipesByUserId(userId: string, isOwner: boolean) {
+  const where: any = { userId };
+  if (!isOwner) where.isPublic = true;
+  const recipes = await prisma.recipe.findMany({
+    where,
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      imageUrl: true,
+      isPublic: true,
+      tags: { include: { tag: true } },
+      createdAt: true,
+      updatedAt: true,
+      ratings: { select: { value: true } },
+      versions: {
+        select: { ingredients: true, instructions: true },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  return recipes.map((r: any) => {
+    const averageRating = r.ratings.length
+      ? r.ratings.reduce((sum: number, rat: { value: number }) => sum + rat.value, 0) / r.ratings.length
+      : null;
+    const { ratings, ...rest } = r;
+    return { ...rest, averageRating };
+  });
 } 

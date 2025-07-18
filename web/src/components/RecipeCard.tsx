@@ -20,8 +20,8 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
     <Card
       sx={{
         height: '100%',
-        minWidth: 320,
-        maxWidth: 400,
+        width: '100%',
+        maxWidth: 320,
         display: 'flex',
         flexDirection: 'column',
         transition: 'box-shadow 0.2s, transform 0.2s',
@@ -31,7 +31,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
           boxShadow: 8,
           transform: 'translateY(-4px) scale(1.02)',
         },
-        p: 2,
+        p: 1.2,
       }}
     >
       <CardActionArea component={Link} to={`/recipes/${recipe.id}`} sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>

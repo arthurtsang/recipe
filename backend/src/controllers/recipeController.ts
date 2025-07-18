@@ -7,6 +7,7 @@ import * as userService from '../services/userService';
 import type { FileFilterCallback } from 'multer';
 import type { Request as ExpressRequest } from 'express';
 import { PrismaClient } from '@prisma/client';
+import axios from 'axios';
 
 const prisma = new PrismaClient();
 
@@ -105,6 +106,25 @@ export async function updateRecipe(req: Request, res: Response) {
 
 export async function deleteRecipe(req: Request, res: Response) {
   try {
+    // Fetch the recipe and its versions to get image URLs
+    const recipe = await prisma.recipe.findUnique({
+      where: { id: req.params.id },
+      include: { versions: true },
+    });
+    if (recipe) {
+      // Delete main recipe image if local
+      if (recipe.imageUrl && recipe.imageUrl.startsWith('/uploads/')) {
+        const imgPath = path.join(uploadDir, path.basename(recipe.imageUrl));
+        if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
+      }
+      // Delete all version images if local
+      for (const v of recipe.versions) {
+        if (v.imageUrl && v.imageUrl.startsWith('/uploads/')) {
+          const imgPath = path.join(uploadDir, path.basename(v.imageUrl));
+          if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
+        }
+      }
+    }
     await recipeService.deleteRecipe(req.params.id);
     res.status(204).send();
   } catch (err) {
@@ -116,6 +136,12 @@ export async function deleteRecipe(req: Request, res: Response) {
 export async function deleteRecipeVersion(req: Request, res: Response) {
   try {
     const { id, versionId } = req.params;
+    // Fetch the version to get image URL
+    const version = await prisma.recipeVersion.findUnique({ where: { id: versionId } });
+    if (version && version.imageUrl && version.imageUrl.startsWith('/uploads/')) {
+      const imgPath = path.join(uploadDir, path.basename(version.imageUrl));
+      if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
+    }
     await prisma.recipeVersion.delete({ where: { id: versionId } });
     // Return the updated recipe with all versions
     const recipe = await prisma.recipe.findUnique({ where: { id }, include: { versions: true } });
@@ -168,5 +194,90 @@ export async function rateRecipe(req: Request, res: Response) {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to rate recipe' });
+  }
+}
+
+export async function searchRecipes(req: Request, res: Response) {
+  try {
+    const keywords = Array.isArray(req.body.keywords) ? req.body.keywords : [];
+    const page = req.body.page ? parseInt(req.body.page, 10) : 1;
+    const limit = req.body.limit ? parseInt(req.body.limit, 10) : 12;
+    const recipes = await recipeService.searchRecipesByKeywords(keywords, page, limit);
+    res.json(recipes);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to search recipes' });
+  }
+}
+
+export async function setAlias(req: Request, res: Response) {
+  try {
+    if (!req.oidc?.user?.email) return res.status(401).json({ error: 'Not authenticated' });
+    const dbUser = await userService.getUserByEmail(req.oidc.user.email.toLowerCase());
+    if (!dbUser) return res.status(404).json({ error: 'User not found' });
+    const { alias } = req.body;
+    if (!alias || typeof alias !== 'string') return res.status(400).json({ error: 'Alias required' });
+    // Check for uniqueness
+    const existing = await userService.getUserByAlias(alias);
+    if (existing && existing.id !== dbUser.id) return res.status(409).json({ error: 'Alias already taken' });
+    await userService.setUserAlias(dbUser.id, alias);
+    res.json({ success: true, alias });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to set alias' });
+  }
+}
+
+export async function getRecipesByAlias(req: Request, res: Response) {
+  try {
+    const { alias } = req.params;
+    const user = await userService.getUserByAlias(alias);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const isOwner = req.oidc?.user?.email?.toLowerCase() === user.email;
+    const recipes = await recipeService.getRecipesByUserId(user.id, isOwner);
+    res.json({ user, recipes });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch user recipes' });
+  }
+}
+
+export async function importRecipe(req: Request, res: Response) {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'URL is required' });
+    // Call AI service to import recipe from external site
+    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000/import-recipe';
+    const response = await axios.post(aiServiceUrl, { url });
+    res.status(200).json(response.data);
+  } catch (err: unknown) {
+    if (axios.isAxiosError(err)) {
+      res.status(err.response?.status || 500).json({ error: err.response?.data?.error || err.message });
+    } else if (err instanceof Error) {
+      res.status(500).json({ error: err.message });
+    } else {
+      res.status(500).json({ error: 'Failed to import recipe' });
+    }
+  }
+}
+
+export async function autoCategory(req: Request, res: Response) {
+  try {
+    const { title, description, ingredients, instructions } = req.body;
+    if (!title && !description && !ingredients && !instructions) {
+      return res.status(400).json({ error: 'At least one field is required' });
+    }
+    // Call AI service for category prediction
+    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000/auto-category';
+    const response = await axios.post(aiServiceUrl, { title, description, ingredients, instructions });
+    res.status(200).json(response.data);
+  } catch (err: unknown) {
+    if (axios.isAxiosError(err)) {
+      res.status(err.response?.status || 500).json({ error: err.response?.data?.error || err.message });
+    } else if (err instanceof Error) {
+      res.status(500).json({ error: err.message });
+    } else {
+      res.status(500).json({ error: 'Failed to auto-categorize recipe' });
+    }
   }
 } 

@@ -14,5 +14,10 @@ router.delete('/:id', requiresAuth(), recipeController.deleteRecipe);
 router.delete('/:id/versions/:versionId', requiresAuth(), recipeController.deleteRecipeVersion);
 router.get('/:id/ratings', recipeController.getRecipeRatings);
 router.post('/:id/ratings', requiresAuth(), recipeController.rateRecipe);
+router.post('/search', recipeController.searchRecipes);
+router.post('/set-alias', requiresAuth(), recipeController.setAlias);
+router.get('/user/:alias', recipeController.getRecipesByAlias);
+router.post('/import', requiresAuth(), recipeController.importRecipe);
+router.post('/auto-category', requiresAuth(), recipeController.autoCategory);
 
 export default router; 
