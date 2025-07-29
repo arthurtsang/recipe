@@ -1,5 +1,5 @@
 {
-  "appTitle": "Recipe App",
+  "appTitle": "Metro Bistro",
   "recipes": "Recipes",
   "searchPlaceholder": "Search recipes...",
   "addRecipe": "Add Recipe",
@@ -35,5 +35,13 @@
   "english": "English",
   "chinese": "Chinese",
   "home": "Home",
-  "uploadImage": "Upload Image"
+  "uploadImage": "Upload Image",
+  "importRecipe": "Import Recipe",
+  "import": "Import",
+  "importing": "Importing...",
+  "importRecipeDescription": "Enter a recipe URL to import. We'll extract the recipe information using AI.",
+  "recipeUrl": "Recipe URL",
+  "importedRecipe": "Imported Recipe",
+  "saving": "Saving...",
+  "tags": "Tags"
 } 

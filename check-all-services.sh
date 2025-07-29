@@ -26,10 +26,9 @@ cd /home/tsangc1/Projects/recipe/backend
 ./manage-backend.sh status
 echo ""
 
-# Check UI
+# UI is served by the backend
 echo "4. UI Status:"
-cd /home/tsangc1/Projects/recipe/web
-./manage-ui.sh status
+echo "UI is served by the backend on port 4000"
 echo ""
 
 echo "=========================================="
@@ -37,8 +36,7 @@ echo "Service URLs:"
 echo "=========================================="
 echo "  • PostgreSQL: localhost:5433"
 echo "  • AI Server: http://localhost:8001"
-echo "  • Backend: http://localhost:8080"
-echo "  • UI: http://localhost:4000"
+echo "  • Backend + UI: http://localhost:4000"
 echo ""
 echo "To start all: ./start-all-services.sh"
 echo "To stop all: ./stop-all-services.sh" 

@@ -236,7 +236,7 @@ function getRecipeRatings(req, res) {
             if ((_b = (_a = req.oidc) === null || _a === void 0 ? void 0 : _a.user) === null || _b === void 0 ? void 0 : _b.email) {
                 const dbUser = yield prisma.user.findUnique({ where: { email: req.oidc.user.email.toLowerCase() } });
                 if (dbUser) {
-                    const r = ratings.find(r => r.userId === dbUser.id);
+                    const r = ratings.find((r) => r.userId === dbUser.id);
                     if (r)
                         userRating = r.value;
                 }
@@ -345,13 +345,14 @@ function importRecipe(req, res) {
             if (!url)
                 return res.status(400).json({ error: 'URL is required' });
             // Call AI service to import recipe from external site
-            const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000/import-recipe';
-            const response = yield axios_1.default.post(aiServiceUrl, { url });
+            const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
+            const response = yield axios_1.default.post(`${aiServiceUrl}/import-recipe`, { url });
             res.status(200).json(response.data);
         }
         catch (err) {
-            if (axios_1.default.isAxiosError(err)) {
-                res.status(((_a = err.response) === null || _a === void 0 ? void 0 : _a.status) || 500).json({ error: ((_c = (_b = err.response) === null || _b === void 0 ? void 0 : _b.data) === null || _c === void 0 ? void 0 : _c.error) || err.message });
+            if (err && typeof err === 'object' && 'response' in err) {
+                const axiosError = err;
+                res.status(((_a = axiosError.response) === null || _a === void 0 ? void 0 : _a.status) || 500).json({ error: ((_c = (_b = axiosError.response) === null || _b === void 0 ? void 0 : _b.data) === null || _c === void 0 ? void 0 : _c.error) || axiosError.message });
             }
             else if (err instanceof Error) {
                 res.status(500).json({ error: err.message });
@@ -371,13 +372,14 @@ function autoCategory(req, res) {
                 return res.status(400).json({ error: 'At least one field is required' });
             }
             // Call AI service for category prediction
-            const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000/auto-category';
-            const response = yield axios_1.default.post(aiServiceUrl, { title, description, ingredients, instructions });
+            const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
+            const response = yield axios_1.default.post(`${aiServiceUrl}/auto-category`, { title, description, ingredients, instructions });
             res.status(200).json(response.data);
         }
         catch (err) {
-            if (axios_1.default.isAxiosError(err)) {
-                res.status(((_a = err.response) === null || _a === void 0 ? void 0 : _a.status) || 500).json({ error: ((_c = (_b = err.response) === null || _b === void 0 ? void 0 : _b.data) === null || _c === void 0 ? void 0 : _c.error) || err.message });
+            if (err && typeof err === 'object' && 'response' in err) {
+                const axiosError = err;
+                res.status(((_a = axiosError.response) === null || _a === void 0 ? void 0 : _a.status) || 500).json({ error: ((_c = (_b = axiosError.response) === null || _b === void 0 ? void 0 : _b.data) === null || _c === void 0 ? void 0 : _c.error) || axiosError.message });
             }
             else if (err instanceof Error) {
                 res.status(500).json({ error: err.message });

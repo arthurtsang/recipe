@@ -25,7 +25,7 @@ app.use((req, res, next) => {
 });
 
 app.use(cors({
-  origin: 'https://recipe.youramaryllis.com',
+  origin: ['https://recipe.youramaryllis.com', 'http://localhost:4000'],
   credentials: true,
 }));
 
@@ -34,7 +34,7 @@ app.use(express.json());
 // OIDC config for Google
 app.use(auth({
   issuerBaseURL: 'https://accounts.google.com',
-  baseURL: process.env.BASE_URL || 'http://localhost:4000',
+  baseURL: process.env.NODE_ENV === 'production' ? 'https://recipe.youramaryllis.com' : (process.env.BASE_URL || 'http://localhost:4000'),
   clientID: process.env.GOOGLE_CLIENT_ID!,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
   secret: process.env.SESSION_SECRET || 'dev-secret',
@@ -42,8 +42,8 @@ app.use(auth({
   authRequired: false,
   session: {
     cookie: {
-      sameSite: 'None',
-      secure: true,
+      sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
+      secure: process.env.NODE_ENV === 'production',
     }
   },
   authorizationParams: {
@@ -55,6 +55,7 @@ app.use(auth({
     callback: '/auth/google/callback',
     logout: '/logout',
   },
+
   afterCallback: async (req, res, session) => {
     let user = session.user;
     if (!user && session.id_token) {

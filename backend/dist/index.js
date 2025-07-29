@@ -66,14 +66,14 @@ app.use((req, res, next) => {
     next();
 });
 app.use((0, cors_1.default)({
-    origin: 'https://recipe.youramaryllis.com',
+    origin: ['https://recipe.youramaryllis.com', 'http://localhost:4000'],
     credentials: true,
 }));
 app.use(express_1.default.json());
 // OIDC config for Google
 app.use((0, express_openid_connect_1.auth)({
     issuerBaseURL: 'https://accounts.google.com',
-    baseURL: process.env.BASE_URL || 'http://localhost:4000',
+    baseURL: process.env.NODE_ENV === 'production' ? 'https://recipe.youramaryllis.com' : (process.env.BASE_URL || 'http://localhost:4000'),
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     secret: process.env.SESSION_SECRET || 'dev-secret',
@@ -81,8 +81,8 @@ app.use((0, express_openid_connect_1.auth)({
     authRequired: false,
     session: {
         cookie: {
-            sameSite: 'None',
-            secure: true,
+            sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
+            secure: process.env.NODE_ENV === 'production',
         }
     },
     authorizationParams: {

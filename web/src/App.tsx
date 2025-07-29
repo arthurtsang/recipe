@@ -3,8 +3,11 @@ import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-do
 import RecipeList from './pages/RecipeList';
 import RecipeDetail from './pages/RecipeDetail';
 import RecipeForm from './pages/RecipeForm';
-import { Container, CssBaseline, AppBar, Toolbar, Typography, Button, Avatar, Menu, MenuItem, IconButton, ListItemIcon } from '@mui/material';
+import ImportRecipe from './components/ImportRecipe';
+import { Container, CssBaseline, AppBar, Toolbar, Typography, Button, Avatar, Menu, MenuItem, IconButton, ListItemIcon, Box } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
+import AddIcon from '@mui/icons-material/Add';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { useTranslation } from 'react-i18next';
 import i18n from './i18n';
 
@@ -19,6 +22,7 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const location = useLocation();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const open = Boolean(anchorEl);
   const { t } = useTranslation();
   const currentLang = i18n.language?.split('-')[0] || 'en';
@@ -53,13 +57,51 @@ function App() {
       <AppBar position="static" color="default" elevation={0} sx={{ mb: 4 }}>
         <Container maxWidth="lg">
           <Toolbar disableGutters sx={{ px: 2 }}>
-            <Typography variant="h6" sx={{ flexGrow: 1 }}>
+            <Box 
+              component={Link} 
+              to="/" 
+              sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                flexGrow: 1, 
+                textDecoration: 'none',
+                color: 'inherit',
+                '&:hover': {
+                  opacity: 0.8
+                }
+              }}
+            >
+              <img 
+                src="/metro-bistro-icon.png" 
+                alt="Metro Bistro" 
+                style={{ 
+                  height: '40px', 
+                  width: '40px', 
+                  marginRight: '12px',
+                  borderRadius: '4px'
+                }} 
+              />
+              <Typography variant="h6">
               {t('appTitle')}
             </Typography>
-            <Button color="inherit" component={Link} to="/">{t('home')}</Button>
+            </Box>
             {user ? (
               <>
-                <Button color="inherit" component={Link} to="/recipes/new">{t('addRecipe')}</Button>
+                <Button 
+                  color="inherit" 
+                  component={Link} 
+                  to="/recipes/new"
+                  startIcon={<AddIcon />}
+                >
+                  {t('addRecipe')}
+                </Button>
+                <Button 
+                  color="inherit" 
+                  onClick={() => setImportDialogOpen(true)}
+                  startIcon={<FileDownloadIcon />}
+                >
+                  {t('importRecipe', 'Import')}
+                </Button>
                 <IconButton onClick={handleAvatarClick} sx={{ ml: 2 }} size="small">
                   <Avatar alt={user.name} src={user.picture} />
                 </IconButton>
@@ -104,6 +146,11 @@ function App() {
           <Route path="/recipes/:id" element={<RecipeDetail user={user} />} />
         </Routes>
       </Container>
+      
+      <ImportRecipe 
+        open={importDialogOpen}
+        onClose={() => setImportDialogOpen(false)}
+      />
     </>
   );
 }

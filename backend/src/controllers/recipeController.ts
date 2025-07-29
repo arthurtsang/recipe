@@ -9,14 +9,19 @@ import type { Request as ExpressRequest } from 'express';
 import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
 
+// Extend Express Request to include file property
+interface MulterRequest extends Request {
+  file?: any;
+}
+
 const prisma = new PrismaClient();
 
 const uploadDir = path.join(__dirname, '../../uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
 const storage = multer.diskStorage({
-  destination: (req: ExpressRequest, file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => cb(null, uploadDir),
-  filename: (req: ExpressRequest, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
+  destination: (req: ExpressRequest, file: any, cb: (error: Error | null, destination: string) => void) => cb(null, uploadDir),
+  filename: (req: ExpressRequest, file: any, cb: (error: Error | null, filename: string) => void) => {
     const ext = path.extname(file.originalname);
     const name = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
     cb(null, name);
@@ -29,7 +34,7 @@ const imageMimeTypes = [
 
 const upload = multer({
   storage,
-  fileFilter: (req: ExpressRequest, file: Express.Multer.File, cb: FileFilterCallback) => {
+  fileFilter: (req: ExpressRequest, file: any, cb: FileFilterCallback) => {
     if (imageMimeTypes.includes(file.mimetype)) cb(null, true);
     else cb(new Error('Only image files are allowed!'));
   },
@@ -38,7 +43,7 @@ const upload = multer({
 
 export const uploadImage = upload.single('image');
 
-export function uploadImageHandler(req: Request, res: Response) {
+export function uploadImageHandler(req: MulterRequest, res: Response) {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   // Return a URL relative to /uploads
   const url = `/uploads/${req.file.filename}`;
@@ -156,17 +161,17 @@ export async function getRecipeRatings(req: Request, res: Response) {
   try {
     const { id } = req.params;
     const ratings = await prisma.rating.findMany({ where: { recipeId: id } });
-    const avg = ratings.length ? ratings.reduce((sum, r) => sum + r.value, 0) / ratings.length : null;
+    const avg = ratings.length ? ratings.reduce((sum: number, r: any) => sum + r.value, 0) / ratings.length : null;
     let userRating = null;
     if (req.oidc?.user?.email) {
       const dbUser = await prisma.user.findUnique({ where: { email: req.oidc.user.email.toLowerCase() } });
       if (dbUser) {
-        const r = ratings.find(r => r.userId === dbUser.id);
+        const r = ratings.find((r: any) => r.userId === dbUser.id);
         if (r) userRating = r.value;
       }
     }
     res.json({ average: avg, user: userRating });
-  } catch (err) {
+  } catch (err: unknown) {
     console.error(err);
     res.status(500).json({ error: 'Failed to get ratings' });
   }
@@ -189,9 +194,9 @@ export async function rateRecipe(req: Request, res: Response) {
     });
     // Return updated average and user rating
     const ratings = await prisma.rating.findMany({ where: { recipeId: id } });
-    const avg = ratings.length ? ratings.reduce((sum, r) => sum + r.value, 0) / ratings.length : null;
+    const avg = ratings.length ? ratings.reduce((sum: number, r: any) => sum + r.value, 0) / ratings.length : null;
     res.json({ average: avg, user: value });
-  } catch (err) {
+  } catch (err: unknown) {
     console.error(err);
     res.status(500).json({ error: 'Failed to rate recipe' });
   }
@@ -247,12 +252,13 @@ export async function importRecipe(req: Request, res: Response) {
     const { url } = req.body;
     if (!url) return res.status(400).json({ error: 'URL is required' });
     // Call AI service to import recipe from external site
-    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000/import-recipe';
-    const response = await axios.post(aiServiceUrl, { url });
+    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
+    const response = await axios.post(`${aiServiceUrl}/import-recipe`, { url });
     res.status(200).json(response.data);
   } catch (err: unknown) {
-    if (axios.isAxiosError(err)) {
-      res.status(err.response?.status || 500).json({ error: err.response?.data?.error || err.message });
+    if (err && typeof err === 'object' && 'response' in err) {
+      const axiosError = err as any;
+      res.status(axiosError.response?.status || 500).json({ error: axiosError.response?.data?.error || axiosError.message });
     } else if (err instanceof Error) {
       res.status(500).json({ error: err.message });
     } else {
@@ -268,12 +274,13 @@ export async function autoCategory(req: Request, res: Response) {
       return res.status(400).json({ error: 'At least one field is required' });
     }
     // Call AI service for category prediction
-    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000/auto-category';
-    const response = await axios.post(aiServiceUrl, { title, description, ingredients, instructions });
+    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
+    const response = await axios.post(`${aiServiceUrl}/auto-category`, { title, description, ingredients, instructions });
     res.status(200).json(response.data);
   } catch (err: unknown) {
-    if (axios.isAxiosError(err)) {
-      res.status(err.response?.status || 500).json({ error: err.response?.data?.error || err.message });
+    if (err && typeof err === 'object' && 'response' in err) {
+      const axiosError = err as any;
+      res.status(axiosError.response?.status || 500).json({ error: axiosError.response?.data?.error || axiosError.message });
     } else if (err instanceof Error) {
       res.status(500).json({ error: err.message });
     } else {

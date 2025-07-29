@@ -44,13 +44,9 @@ sudo systemctl enable metro-bistro-backend
 echo "✅ Backend installed"
 echo ""
 
-# Install UI
-echo "4. Installing UI..."
-cd /home/tsangc1/Projects/recipe/web
-sudo cp metro-bistro-ui.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable metro-bistro-ui
-echo "✅ UI installed"
+# UI is now served by the backend
+echo "4. UI will be served by the backend"
+echo "✅ UI configured"
 echo ""
 
 echo "=========================================="
@@ -60,8 +56,7 @@ echo ""
 echo "Services installed:"
 echo "  • PostgreSQL (metro-bistro-postgres) - Port 5433"
 echo "  • AI Server (ai-server) - Port 8001"
-echo "  • Backend (metro-bistro-backend) - Port 8080"
-echo "  • UI (metro-bistro-ui) - Port 4000"
+echo "  • Backend + UI (metro-bistro-backend) - Port 4000"
 echo ""
 echo "To start all services:"
 echo "  cd /home/tsangc1/Projects/recipe"

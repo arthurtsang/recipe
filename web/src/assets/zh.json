@@ -1,5 +1,5 @@
 {
-  "appTitle": "食譜應用",
+  "appTitle": "Metro Bistro",
   "recipes": "食譜",
   "searchPlaceholder": "搜尋食譜...",
   "addRecipe": "新增食譜",
@@ -35,5 +35,13 @@
   "english": "英文",
   "chinese": "中文",
   "home": "首頁",
-  "uploadImage": "上傳圖片"
+  "uploadImage": "上傳圖片",
+  "importRecipe": "匯入食譜",
+  "import": "匯入",
+  "importing": "匯入中...",
+  "importRecipeDescription": "輸入食譜網址以匯入。我們將使用 AI 提取食譜資訊。",
+  "recipeUrl": "食譜網址",
+  "importedRecipe": "已匯入的食譜",
+  "saving": "儲存中...",
+  "tags": "標籤"
 } 

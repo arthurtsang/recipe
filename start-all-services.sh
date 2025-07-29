@@ -29,11 +29,9 @@ cd /home/tsangc1/Projects/recipe/backend
 echo "✅ Backend started"
 echo ""
 
-# Start UI
-echo "4. Starting UI..."
-cd /home/tsangc1/Projects/recipe/web
-./manage-ui.sh start
-echo "✅ UI started"
+# UI is served by the backend
+echo "4. UI will be served by the backend"
+echo "✅ UI configured"
 echo ""
 
 echo "=========================================="
@@ -43,8 +41,7 @@ echo ""
 echo "Services are now running:"
 echo "  • PostgreSQL: localhost:5433"
 echo "  • AI Server: http://localhost:8001"
-echo "  • Backend: http://localhost:8080"
-echo "  • UI: http://localhost:4000"
+echo "  • Backend + UI: http://localhost:4000"
 echo ""
 echo "To check status: ./check-all-services.sh"
 echo "To stop all: ./stop-all-services.sh" 

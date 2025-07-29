@@ -8,11 +8,9 @@ echo "Stopping Metro Bistro Services"
 echo "=========================================="
 echo ""
 
-# Stop UI first (depends on backend)
-echo "1. Stopping UI..."
-cd /home/tsangc1/Projects/recipe/web
-./manage-ui.sh stop
-echo "✅ UI stopped"
+# UI is served by the backend, so no separate stop needed
+echo "1. UI is served by the backend"
+echo "✅ UI will stop with backend"
 echo ""
 
 # Stop Backend

@@ -105,6 +105,8 @@ Environment=VITE_API_URL=http://localhost:8080
 - **App Name**: Metro Bistro
 - **Icon**: `metro-bistro-icon.png` (converted from `image546.gif`)
 - **Title**: "Metro Bistro - Recipe Management"
+- **Header**: Shows Metro Bistro logo and title, clickable to go home
+- **Translations**: Available in English and Chinese
 
 ## 📝 Service Dependencies
 

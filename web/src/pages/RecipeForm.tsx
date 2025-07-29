@@ -132,18 +132,38 @@ const RecipeForm: React.FC<{ user: User | null }> = ({ user }) => {
           required
         />
         <Box>
-          <Button variant="outlined" component="label">
-            Upload Image
-            <input type="file" accept="image/*" hidden onChange={handleImageChange} />
-          </Button>
-          {uploading && <Typography sx={{ ml: 2 }} component="span">Uploading...</Typography>}
-          {imagePreview && <Box mt={2}><img src={imagePreview} alt="Preview" style={{ maxWidth: 200 }} /></Box>}
+          <Typography variant="subtitle2" gutterBottom>
+            Image (Upload file or enter URL)
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 1 }}>
+            <Button variant="outlined" component="label">
+              Upload Image File
+              <input type="file" accept="image/*" hidden onChange={handleImageChange} />
+            </Button>
+            <Typography variant="body2" color="text.secondary">or</Typography>
+          </Box>
+          <TextField
+            fullWidth
+            label="Image URL"
+            value={imageUrl}
+            onChange={e => setImageUrl(e.target.value)}
+            placeholder="https://example.com/image.jpg"
+            helperText="Enter a direct link to an image"
+          />
+          {uploading && <Typography sx={{ mt: 1 }} component="span">Uploading...</Typography>}
+          {(imagePreview || imageUrl) && (
+            <Box mt={2}>
+              <img 
+                src={imagePreview || imageUrl} 
+                alt="Preview" 
+                style={{ maxWidth: 200, maxHeight: 200, objectFit: 'contain' }} 
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            </Box>
+          )}
         </Box>
-        <TextField
-          label="Or Image URL"
-          value={imageUrl}
-          onChange={e => setImageUrl(e.target.value)}
-        />
         <Button type="submit" variant="contained" disabled={loading}>{isEdit ? 'Update' : 'Submit'}</Button>
         {loading && <Typography>Submitting...</Typography>}
         {error && <Typography color="error">Error: {error}</Typography>}
