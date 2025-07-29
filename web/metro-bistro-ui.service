@@ -1,0 +1,25 @@
+[Unit]
+Description=Metro Bistro UI Server
+After=network.target metro-bistro-backend.service
+Wants=network.target metro-bistro-backend.service
+
+[Service]
+Type=simple
+User=tsangc1
+Group=tsangc1
+WorkingDirectory=/home/tsangc1/Projects/recipe/web
+Environment=PATH=/home/tsangc1/Projects/recipe/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=NODE_ENV=production
+ExecStartPre=/usr/bin/npm install
+ExecStartPre=/usr/bin/npm run build
+ExecStart=/usr/bin/npx vite preview --host 0.0.0.0 --port 4000
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables (if needed)
+# Environment=VITE_API_URL=http://localhost:8080
+
+[Install]
+WantedBy=multi-user.target 

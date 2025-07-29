@@ -28,7 +28,8 @@ class ChatResponse(BaseModel):
     answer: str
 
 llm = pipeline("text-generation", model="mistralai/Mistral-7B-Instruct-v0.3",
-    token=os.getenv("HUGGINGFACE_HUB_TOKEN")
+    token=os.getenv("HUGGINGFACE_HUB_TOKEN"),
+    device="cpu"
 )
 
 def extract_keywords(question: str) -> list[str]:

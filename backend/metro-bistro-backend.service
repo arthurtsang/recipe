@@ -1,0 +1,26 @@
+[Unit]
+Description=Metro Bistro Backend Server
+After=network.target metro-bistro-postgres.service
+Wants=network.target metro-bistro-postgres.service
+
+[Service]
+Type=simple
+User=tsangc1
+Group=tsangc1
+WorkingDirectory=/home/tsangc1/Projects/recipe/backend
+Environment=PATH=/home/tsangc1/Projects/recipe/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=NODE_ENV=production
+ExecStartPre=/usr/bin/npm install
+ExecStartPre=/usr/bin/npm run build
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables (if needed)
+Environment=DATABASE_URL=postgresql://metro_user:metro_password@localhost:5433/metro_bistro
+# Environment=JWT_SECRET=your_jwt_secret_here
+
+[Install]
+WantedBy=multi-user.target 

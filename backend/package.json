@@ -1,7 +1,7 @@
 {
-  "name": "backend",
+  "name": "metro-bistro-backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Metro Bistro Recipe Management Backend",
   "main": "index.js",
   "scripts": {
     "dev": "npm run build && concurrently \"npm run dev:backend\" \"npm run dev:ui\"",

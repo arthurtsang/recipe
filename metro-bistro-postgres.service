@@ -1,0 +1,26 @@
+[Unit]
+Description=Metro Bistro PostgreSQL Database
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=tsangc1
+Group=docker
+ExecStartPre=-/usr/bin/docker stop metro-bistro-postgres
+ExecStartPre=-/usr/bin/docker rm metro-bistro-postgres
+ExecStart=/usr/bin/docker run --name metro-bistro-postgres \
+    -e POSTGRES_DB=metro_bistro \
+    -e POSTGRES_USER=metro_user \
+    -e POSTGRES_PASSWORD=metro_password \
+    -p 5433:5432 \
+    -v metro_bistro_data:/var/lib/postgresql/data \
+    postgres:15
+ExecStop=/usr/bin/docker stop metro-bistro-postgres
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target 
