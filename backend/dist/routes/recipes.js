@@ -39,6 +39,7 @@ const recipeController_1 = require("../controllers/recipeController");
 const express_openid_connect_1 = require("express-openid-connect");
 const router = (0, express_1.Router)();
 router.get('/', recipeController.getAllRecipes);
+router.get('/proxy-image', recipeController.proxyImage);
 router.get('/:id', recipeController.getRecipeById);
 router.post('/', (0, express_openid_connect_1.requiresAuth)(), recipeController.createRecipe);
 router.post('/upload', (0, express_openid_connect_1.requiresAuth)(), recipeController_1.uploadImage, recipeController_1.uploadImageHandler);
@@ -52,4 +53,5 @@ router.post('/set-alias', (0, express_openid_connect_1.requiresAuth)(), recipeCo
 router.get('/user/:alias', recipeController.getRecipesByAlias);
 router.post('/import', (0, express_openid_connect_1.requiresAuth)(), recipeController.importRecipe);
 router.post('/auto-category', (0, express_openid_connect_1.requiresAuth)(), recipeController.autoCategory);
+router.post('/chat', recipeController.chat);
 exports.default = router;

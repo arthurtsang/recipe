@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import RecipeCard from '../components/RecipeCard';
-import { Typography, Box, TextField, Button, Container } from '@mui/material';
+import { Typography, Box, TextField, Button, Container, CircularProgress } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 
 // Define a Recipe type for better type safety
@@ -64,39 +64,103 @@ export default function RecipeList() {
   return (
     <Box
       sx={{
-        maxWidth: 'lg',
         minHeight: '100vh',
-        bgcolor: 'background.default',
-        px: { xs: 2, sm: 4, md: 8 },
+        background: 'linear-gradient(135deg, #FFF8F0 0%, #F5F5DC 100%)',
         py: 4,
-        boxSizing: 'border-box',
-        mx: 'auto',
       }}
     >
-      <Typography variant="h4" gutterBottom>{t('recipes')}</Typography>
-      <Box component="form" onSubmit={handleSubmit} sx={{ mb: 4, display: 'flex', gap: 2, maxWidth: 700, width: '100%', mx: 'auto' }}>
-        <TextField
-          type="text"
-          label={t('searchPlaceholder')}
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          variant="outlined"
-          size="small"
-          fullWidth
-        />
-        <Button type="submit" variant="contained">{t('search')}</Button>
-      </Box>
-      {loading && recipes.length === 0 && <Typography>{t('loadingRecipes')}</Typography>}
-      {error && <Typography color="error">{t('error', { error })}</Typography>}
-      {recipes.length === 0 && !loading ? (
-        <Typography sx={{ textAlign: 'center', mt: 8, width: '100%' }}>{t('noRecipesFound')}</Typography>
-      ) : (
-        <Container maxWidth="lg" disableGutters>
+      <Container maxWidth="lg">
+        <Box sx={{ textAlign: 'center', mb: 6 }}>
+          <Typography 
+            variant="h3" 
+            gutterBottom 
+            sx={{ 
+              fontWeight: 700,
+              background: 'linear-gradient(135deg, #D2691E 0%, #FF8C42 100%)',
+              backgroundClip: 'text',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              mb: 2,
+            }}
+          >
+            {t('recipes')}
+          </Typography>
+          <Typography 
+            variant="h6" 
+            color="text.secondary"
+            sx={{ mb: 4, maxWidth: 600, mx: 'auto' }}
+          >
+            Discover delicious recipes from our community. Search, explore, and find your next favorite dish.
+          </Typography>
+        </Box>
+        
+        <Box 
+          component="form" 
+          onSubmit={handleSubmit} 
+          sx={{ 
+            mb: 6, 
+            display: 'flex', 
+            gap: 2, 
+            maxWidth: 600, 
+            width: '100%', 
+            mx: 'auto',
+            background: 'white',
+            p: 3,
+            borderRadius: 3,
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+          }}
+        >
+          <TextField
+            type="text"
+            label={t('searchPlaceholder')}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            variant="outlined"
+            size="small"
+            fullWidth
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+              },
+            }}
+          />
+          <Button 
+            type="submit" 
+            variant="contained"
+            sx={{ px: 4 }}
+          >
+            {t('search')}
+          </Button>
+                </Box>
+        
+        {loading && recipes.length === 0 && (
+          <Box sx={{ textAlign: 'center', py: 8 }}>
+            <CircularProgress size={60} sx={{ color: 'primary.main', mb: 2 }} />
+            <Typography variant="h6" color="text.secondary">{t('loadingRecipes')}</Typography>
+          </Box>
+        )}
+        
+        {error && (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography color="error" variant="h6">{t('error')}: {error}</Typography>
+          </Box>
+        )}
+        
+        {recipes.length === 0 && !loading ? (
+          <Box sx={{ textAlign: 'center', py: 8 }}>
+            <Typography variant="h5" color="text.secondary" sx={{ mb: 2 }}>
+              {t('noRecipesFound')}
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              Try adjusting your search terms or browse our collection.
+            </Typography>
+          </Box>
+        ) : (
           <Box
             sx={{
               display: 'grid',
               gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
-              gap: { xs: 1, sm: 2, md: 2 },
+              gap: { xs: 2, sm: 3, md: 4 },
               width: '100%',
               mx: 'auto',
               justifyItems: 'center',
@@ -108,9 +172,17 @@ export default function RecipeList() {
               </div>
             ))}
           </Box>
-        </Container>
-      )}
-      {loading && recipes.length > 0 && <Typography sx={{ textAlign: 'center', mt: 2 }}>Loading more...</Typography>}
+        )}
+        
+        {loading && recipes.length > 0 && (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <CircularProgress size={40} sx={{ color: 'primary.main' }} />
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Loading more recipes...
+            </Typography>
+          </Box>
+        )}
+      </Container>
     </Box>
   );
 }

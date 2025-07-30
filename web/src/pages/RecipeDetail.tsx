@@ -121,13 +121,29 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       setRecipe(data);
       // Find the new/updated version index
       let newIdx = 0;
-      if (!createNewVersion && selectedVersion.id) {
+      if (!createNewVersion && selectedVersion.id && data.versions && data.versions.length > 0) {
         newIdx = data.versions.findIndex((v: any) => v.id === selectedVersion.id);
-      } else if (createNewVersion && data.versions.length > 0) {
+        // If version not found, default to 0
+        if (newIdx === -1) newIdx = 0;
+      } else if (createNewVersion && data.versions && data.versions.length > 0) {
         newIdx = 0; // Assume new version is first
       }
-      setSelectedVersionIdx(newIdx);
-      setEditFields({ ...data.versions[newIdx], title: data.title, description: data.description, imageUrl: data.imageUrl });
+      
+      // Only set edit fields if versions exist
+      if (data.versions && data.versions.length > 0) {
+        setSelectedVersionIdx(newIdx);
+        setEditFields({ ...data.versions[newIdx], title: data.title, description: data.description, imageUrl: data.imageUrl });
+      } else {
+        // Handle case where there are no versions
+        setSelectedVersionIdx(0);
+        setEditFields({ 
+          title: data.title, 
+          description: data.description, 
+          imageUrl: data.imageUrl,
+          ingredients: '',
+          instructions: ''
+        });
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     }

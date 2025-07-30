@@ -4,12 +4,15 @@ import RecipeList from './pages/RecipeList';
 import RecipeDetail from './pages/RecipeDetail';
 import RecipeForm from './pages/RecipeForm';
 import ImportRecipe from './components/ImportRecipe';
-import { Container, CssBaseline, AppBar, Toolbar, Typography, Button, Avatar, Menu, MenuItem, IconButton, ListItemIcon, Box } from '@mui/material';
+import RecipeChat from './components/RecipeChat';
+import { Container, CssBaseline, AppBar, Toolbar, Typography, Button, Avatar, Menu, MenuItem, IconButton, ListItemIcon, Box, ThemeProvider, Fab } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AddIcon from '@mui/icons-material/Add';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import ChatIcon from '@mui/icons-material/Chat';
 import { useTranslation } from 'react-i18next';
 import i18n from './i18n';
+import { theme } from './theme';
 
 interface User {
   id: string;
@@ -23,6 +26,7 @@ function App() {
   const location = useLocation();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const open = Boolean(anchorEl);
   const { t } = useTranslation();
   const currentLang = i18n.language?.split('-')[0] || 'en';
@@ -52,7 +56,7 @@ function App() {
   };
 
   return (
-    <>
+    <ThemeProvider theme={theme}>
       <CssBaseline />
       <AppBar position="static" color="default" elevation={0} sx={{ mb: 4 }}>
         <Container maxWidth="lg">
@@ -147,11 +151,32 @@ function App() {
         </Routes>
       </Container>
       
+      {/* Chat Floating Action Button */}
+      <Fab
+        color="primary"
+        aria-label="chat"
+        onClick={() => setChatOpen(true)}
+        sx={{
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          zIndex: 1000,
+          boxShadow: '0 4px 20px rgba(210, 105, 30, 0.3)',
+        }}
+      >
+        <ChatIcon />
+      </Fab>
+      
       <ImportRecipe 
         open={importDialogOpen}
         onClose={() => setImportDialogOpen(false)}
       />
-    </>
+      
+      <RecipeChat
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+      />
+    </ThemeProvider>
   );
 }
 

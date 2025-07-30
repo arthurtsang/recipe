@@ -6,6 +6,7 @@ import { requiresAuth } from 'express-openid-connect';
 const router = Router();
 
 router.get('/', recipeController.getAllRecipes);
+router.get('/proxy-image', recipeController.proxyImage);
 router.get('/:id', recipeController.getRecipeById);
 router.post('/', requiresAuth(), recipeController.createRecipe);
 router.post('/upload', requiresAuth(), uploadImage, uploadImageHandler);
@@ -19,5 +20,6 @@ router.post('/set-alias', requiresAuth(), recipeController.setAlias);
 router.get('/user/:alias', recipeController.getRecipesByAlias);
 router.post('/import', requiresAuth(), recipeController.importRecipe);
 router.post('/auto-category', requiresAuth(), recipeController.autoCategory);
+router.post('/chat', recipeController.chat);
 
 export default router; 

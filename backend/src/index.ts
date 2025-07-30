@@ -94,7 +94,13 @@ const uploadsPath = path.resolve(__dirname, '../uploads');
 app.use('/uploads', express.static(uploadsPath));
 
 // Endpoint to get current user info
-app.get('/api/me', requiresAuth(), async (req: any, res) => {
+app.get('/api/me', (req: any, res, next) => {
+  console.log('Before requiresAuth - req.oidc:', JSON.stringify(req.oidc, null, 2));
+  next();
+}, requiresAuth(), async (req: any, res) => {
+  // Debug: Log the entire OIDC object for comparison
+  console.log('/api/me OIDC object after requiresAuth:', JSON.stringify(req.oidc, null, 2));
+  
   const email = req.oidc.user?.email?.toLowerCase();
   if (!email) return res.status(401).json({ error: 'No email' });
   const dbUser = await userService.getUserByEmail(email);

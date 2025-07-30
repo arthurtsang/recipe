@@ -60,9 +60,15 @@ exports.setAlias = setAlias;
 exports.getRecipesByAlias = getRecipesByAlias;
 exports.importRecipe = importRecipe;
 exports.autoCategory = autoCategory;
+exports.chat = chat;
+exports.proxyImage = proxyImage;
 const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
+const https_1 = __importDefault(require("https"));
+const http_1 = __importDefault(require("http"));
+const url_1 = require("url");
+const crypto_1 = __importDefault(require("crypto"));
 const recipeService = __importStar(require("../services/recipeService"));
 const userService = __importStar(require("../services/userService"));
 const client_1 = require("@prisma/client");
@@ -123,7 +129,12 @@ function getRecipeById(req, res) {
             if (!recipe)
                 return res.status(404).json({ error: 'Recipe not found' });
             console.log('Recipe loaded', recipe);
-            recipe.imageUrl = ((_a = recipe.imageUrl) === null || _a === void 0 ? void 0 : _a.startsWith('/uploads/')) ? `${process.env.BASE_URL}${recipe.imageUrl}` : recipe.imageUrl;
+            // Use the current request's host instead of hardcoded BASE_URL
+            if ((_a = recipe.imageUrl) === null || _a === void 0 ? void 0 : _a.startsWith('/uploads/')) {
+                const protocol = req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http');
+                const host = req.get('host');
+                recipe.imageUrl = `${protocol}://${host}${recipe.imageUrl}`;
+            }
             res.json(recipe);
         }
         catch (err) {
@@ -132,41 +143,211 @@ function getRecipeById(req, res) {
         }
     });
 }
+// Function to download external image and save locally
+function downloadAndSaveImage(imageUrl) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a;
+        if (!imageUrl || !imageUrl.startsWith('http')) {
+            return imageUrl; // Return as-is if not external URL
+        }
+        try {
+            const url = new url_1.URL(imageUrl);
+            const fileExt = ((_a = url.pathname.split('.').pop()) === null || _a === void 0 ? void 0 : _a.toLowerCase()) || 'jpg';
+            const validExts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+            const ext = validExts.includes(fileExt) ? fileExt : 'jpg';
+            // Generate unique filename
+            const hash = crypto_1.default.createHash('md5').update(imageUrl).digest('hex');
+            const filename = `recipe-${hash}.${ext}`;
+            // Fix: Save to the same directory that the static middleware serves from
+            const filepath = path_1.default.join(process.cwd(), 'uploads', filename);
+            console.log(`Downloading image from ${imageUrl} to ${filepath}`);
+            // Ensure uploads directory exists
+            const uploadsDir = path_1.default.dirname(filepath);
+            if (!fs_1.default.existsSync(uploadsDir)) {
+                fs_1.default.mkdirSync(uploadsDir, { recursive: true });
+            }
+            // Check if file already exists
+            if (fs_1.default.existsSync(filepath)) {
+                console.log(`File already exists: ${filepath}`);
+                return `/uploads/${filename}`;
+            }
+            // Download image
+            const client = url.protocol === 'https:' ? https_1.default : http_1.default;
+            return new Promise((resolve, reject) => {
+                // Configure request options with SSL certificate ignore
+                const requestOptions = {
+                    timeout: 10000,
+                    // Ignore SSL certificate errors for sites with self-signed certificates
+                    rejectUnauthorized: false
+                };
+                const request = client.get(imageUrl, requestOptions, (response) => {
+                    if (response.statusCode !== 200) {
+                        console.warn(`Failed to download image from ${imageUrl}: HTTP ${response.statusCode}. Using original URL.`);
+                        // For any non-200 status, fall back to original URL instead of failing
+                        resolve(imageUrl);
+                        return;
+                    }
+                    const fileStream = fs_1.default.createWriteStream(filepath);
+                    response.pipe(fileStream);
+                    fileStream.on('finish', () => {
+                        fileStream.close();
+                        console.log(`Successfully downloaded image to ${filepath}`);
+                        resolve(`/uploads/${filename}`);
+                    });
+                    fileStream.on('error', (err) => {
+                        console.error(`Error writing file ${filepath}:`, err);
+                        fs_1.default.unlink(filepath, () => { }); // Delete partial file
+                        reject(err);
+                    });
+                });
+                request.on('error', (err) => {
+                    console.error(`Error downloading from ${imageUrl}:`, err);
+                    reject(err);
+                });
+                request.setTimeout(10000, () => {
+                    request.destroy();
+                    reject(new Error('Download timeout'));
+                });
+            });
+        }
+        catch (error) {
+            console.error('Error in downloadAndSaveImage:', error);
+            // If download fails, return original URL
+            return imageUrl;
+        }
+    });
+}
 function createRecipe(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c;
+        var _a, _b;
         try {
-            if (!((_a = req.oidc) === null || _a === void 0 ? void 0 : _a.user) || !((_c = (_b = req.oidc) === null || _b === void 0 ? void 0 : _b.user) === null || _c === void 0 ? void 0 : _c.email)) {
-                console.error('Not authenticated', req.oidc);
-                return res.status(401).json({ error: 'Not authenticated !!' });
-            }
-            // Fetch the user from the DB using the email
-            const dbUser = yield userService.getUserByEmail(req.oidc.user.email.toLowerCase());
-            if (!dbUser) {
-                console.error('User not found in DB', req.oidc.user.email);
-                return res.status(401).json({ error: 'User not found in DB' });
-            }
-            const userId = dbUser.id;
-            console.log('Creating recipe for user', userId);
-            const recipe = yield recipeService.createRecipe(Object.assign(Object.assign({}, req.body), { userId }));
-            console.log('Recipe created', recipe);
-            res.status(201).json(recipe);
+            const { title, description, ingredients, instructions, imageUrl, tags } = req.body;
+            // Debug: Log the entire OIDC object
+            console.log('OIDC object:', JSON.stringify(req.oidc, null, 2));
+            // Use the same authentication pattern as rateRecipe
+            if (!((_b = (_a = req.oidc) === null || _a === void 0 ? void 0 : _a.user) === null || _b === void 0 ? void 0 : _b.email))
+                return res.status(401).json({ error: 'Not authenticated' });
+            const dbUser = yield prisma.user.findUnique({ where: { email: req.oidc.user.email.toLowerCase() } });
+            if (!dbUser)
+                return res.status(401).json({ error: 'User not found' });
+            console.log('Found user:', dbUser.id);
+            // Download external image if provided
+            const localImageUrl = imageUrl ? yield downloadAndSaveImage(imageUrl) : '';
+            // Create the recipe first
+            const recipe = yield prisma.recipe.create({
+                data: {
+                    title,
+                    description,
+                    imageUrl: localImageUrl,
+                    userId: dbUser.id,
+                },
+                include: {
+                    user: true,
+                },
+            });
+            // Create the initial version with ingredients and instructions
+            const version = yield prisma.recipeVersion.create({
+                data: {
+                    recipeId: recipe.id,
+                    title,
+                    description: description || '',
+                    ingredients: ingredients || '',
+                    instructions: instructions || '',
+                    imageUrl: localImageUrl,
+                },
+            });
+            // Update the recipe to point to this version as current
+            const updatedRecipe = yield prisma.recipe.update({
+                where: { id: recipe.id },
+                data: { currentVersionId: version.id },
+                include: {
+                    user: true,
+                    currentVersion: true,
+                },
+            });
+            res.status(201).json(updatedRecipe);
         }
         catch (err) {
-            console.error(err);
-            res.status(500).json({ error: 'Failed to create recipe' });
+            if (err && typeof err === 'object' && 'code' in err) {
+                const dbError = err;
+                if (dbError.code === 'P2002') {
+                    return res.status(400).json({ error: 'Recipe with this title already exists' });
+                }
+            }
+            console.error('Error creating recipe:', err);
+            res.status(500).json({ error: 'Internal server error' });
         }
     });
 }
 function updateRecipe(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b;
         try {
-            const recipe = yield recipeService.updateRecipe(req.params.id, req.body);
+            const { id } = req.params;
+            const { title, description, ingredients, instructions, imageUrl, tags } = req.body;
+            // Use the same authentication pattern as rateRecipe and createRecipe
+            if (!((_b = (_a = req.oidc) === null || _a === void 0 ? void 0 : _a.user) === null || _b === void 0 ? void 0 : _b.email))
+                return res.status(401).json({ error: 'Not authenticated' });
+            const dbUser = yield prisma.user.findUnique({ where: { email: req.oidc.user.email.toLowerCase() } });
+            if (!dbUser)
+                return res.status(401).json({ error: 'User not found' });
+            const userId = dbUser.id;
+            // Check if user owns the recipe
+            const existingRecipe = yield prisma.recipe.findUnique({
+                where: { id: id },
+                include: { currentVersion: true },
+            });
+            if (!existingRecipe) {
+                return res.status(404).json({ error: 'Recipe not found' });
+            }
+            if (existingRecipe.userId !== userId) {
+                return res.status(403).json({ error: 'Not authorized to update this recipe' });
+            }
+            // Download external image if provided and different from current
+            const localImageUrl = imageUrl && imageUrl !== existingRecipe.imageUrl
+                ? yield downloadAndSaveImage(imageUrl)
+                : imageUrl;
+            // Update the recipe
+            const updatedRecipe = yield prisma.recipe.update({
+                where: { id: id },
+                data: {
+                    title,
+                    description,
+                    imageUrl: localImageUrl,
+                },
+            });
+            // Update the current version
+            if (existingRecipe.currentVersionId) {
+                yield prisma.recipeVersion.update({
+                    where: { id: existingRecipe.currentVersionId },
+                    data: {
+                        title,
+                        description: description || '',
+                        ingredients: ingredients || '',
+                        instructions: instructions || '',
+                        imageUrl: localImageUrl,
+                    },
+                });
+            }
+            // Return the updated recipe with current version
+            const recipe = yield prisma.recipe.findUnique({
+                where: { id: id },
+                include: {
+                    user: true,
+                    currentVersion: true,
+                },
+            });
             res.json(recipe);
         }
         catch (err) {
-            console.error(err);
-            res.status(500).json({ error: 'Failed to update recipe' });
+            if (err && typeof err === 'object' && 'code' in err) {
+                const dbError = err;
+                if (dbError.code === 'P2002') {
+                    return res.status(400).json({ error: 'Recipe with this title already exists' });
+                }
+            }
+            console.error('Error updating recipe:', err);
+            res.status(500).json({ error: 'Internal server error' });
         }
     });
 }
@@ -339,7 +520,6 @@ function getRecipesByAlias(req, res) {
 }
 function importRecipe(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c;
         try {
             const { url } = req.body;
             if (!url)
@@ -347,19 +527,18 @@ function importRecipe(req, res) {
             // Call AI service to import recipe from external site
             const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
             const response = yield axios_1.default.post(`${aiServiceUrl}/import-recipe`, { url });
-            res.status(200).json(response.data);
+            const importedData = response.data;
+            // Don't download the image here - just return the external URL for preview
+            // The image will be downloaded when the user actually saves the recipe
+            res.status(200).json(importedData);
         }
         catch (err) {
             if (err && typeof err === 'object' && 'response' in err) {
                 const axiosError = err;
-                res.status(((_a = axiosError.response) === null || _a === void 0 ? void 0 : _a.status) || 500).json({ error: ((_c = (_b = axiosError.response) === null || _b === void 0 ? void 0 : _b.data) === null || _c === void 0 ? void 0 : _c.error) || axiosError.message });
+                return res.status(axiosError.response.status).json(axiosError.response.data);
             }
-            else if (err instanceof Error) {
-                res.status(500).json({ error: err.message });
-            }
-            else {
-                res.status(500).json({ error: 'Failed to import recipe' });
-            }
+            console.error('Error importing recipe:', err);
+            res.status(500).json({ error: 'Internal server error' });
         }
     });
 }
@@ -387,6 +566,84 @@ function autoCategory(req, res) {
             else {
                 res.status(500).json({ error: 'Failed to auto-categorize recipe' });
             }
+        }
+    });
+}
+function chat(req, res) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b, _c;
+        try {
+            const { question } = req.body;
+            if (!question) {
+                return res.status(400).json({ error: 'Question is required' });
+            }
+            // Call AI service for chat
+            const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
+            const response = yield axios_1.default.post(`${aiServiceUrl}/chat`, { question });
+            res.status(200).json(response.data);
+        }
+        catch (err) {
+            if (err && typeof err === 'object' && 'response' in err) {
+                const axiosError = err;
+                res.status(((_a = axiosError.response) === null || _a === void 0 ? void 0 : _a.status) || 500).json({ error: ((_c = (_b = axiosError.response) === null || _b === void 0 ? void 0 : _b.data) === null || _c === void 0 ? void 0 : _c.error) || axiosError.message });
+            }
+            else if (err instanceof Error) {
+                res.status(500).json({ error: err.message });
+            }
+            else {
+                res.status(500).json({ error: 'Failed to get chat response' });
+            }
+        }
+    });
+}
+// Image proxy to handle CORS-blocked external images
+function proxyImage(req, res) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const { url } = req.query;
+            if (!url || typeof url !== 'string') {
+                return res.status(400).json({ error: 'URL parameter is required' });
+            }
+            // Validate that it's a proper image URL
+            if (!url.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i)) {
+                return res.status(400).json({ error: 'Invalid image URL' });
+            }
+            // Set appropriate headers to mimic a browser request
+            const headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+            };
+            // For AllRecipes, add their domain as referrer
+            if (url.includes('allrecipes.com')) {
+                headers['Referer'] = 'https://www.allrecipes.com/';
+            }
+            const response = yield axios_1.default.get(url, {
+                headers,
+                responseType: 'stream',
+                timeout: 10000,
+                // Ignore SSL certificate errors for sites with self-signed certificates
+                httpsAgent: new (require('https').Agent)({
+                    rejectUnauthorized: false
+                }),
+                // Also ignore HTTP agent for completeness
+                httpAgent: new (require('http').Agent)({
+                    keepAlive: true
+                })
+            });
+            // Set appropriate response headers
+            res.setHeader('Content-Type', response.headers['content-type'] || 'image/jpeg');
+            res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+            // Pipe the image data to the response
+            response.data.pipe(res);
+        }
+        catch (error) {
+            console.error('Error proxying image:', error);
+            res.status(500).json({ error: 'Failed to proxy image' });
         }
     });
 }

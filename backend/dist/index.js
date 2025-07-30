@@ -129,8 +129,13 @@ app.get('/api/health', (req, res) => {
 const uploadsPath = path_1.default.resolve(__dirname, '../uploads');
 app.use('/uploads', express_1.default.static(uploadsPath));
 // Endpoint to get current user info
-app.get('/api/me', (0, express_openid_connect_1.requiresAuth)(), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.get('/api/me', (req, res, next) => {
+    console.log('Before requiresAuth - req.oidc:', JSON.stringify(req.oidc, null, 2));
+    next();
+}, (0, express_openid_connect_1.requiresAuth)(), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b;
+    // Debug: Log the entire OIDC object for comparison
+    console.log('/api/me OIDC object after requiresAuth:', JSON.stringify(req.oidc, null, 2));
     const email = (_b = (_a = req.oidc.user) === null || _a === void 0 ? void 0 : _a.email) === null || _b === void 0 ? void 0 : _b.toLowerCase();
     if (!email)
         return res.status(401).json({ error: 'No email' });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Dialog, 
   DialogTitle, 
@@ -116,6 +116,17 @@ const ImportRecipe: React.FC<ImportRecipeProps> = ({ open, onClose }) => {
     onClose();
   };
 
+  // Reset state when dialog opens
+  useEffect(() => {
+    if (open) {
+      setUrl('');
+      setError(null);
+      setImportedRecipe(null);
+      setLoading(false);
+      setSaving(false);
+    }
+  }, [open]);
+
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>{t('importRecipe', 'Import Recipe')}</DialogTitle>
@@ -169,7 +180,11 @@ const ImportRecipe: React.FC<ImportRecipeProps> = ({ open, onClose }) => {
             {importedRecipe.imageUrl && (
               <Box sx={{ mb: 2, textAlign: 'center' }}>
                 <img
-                  src={importedRecipe.imageUrl}
+                  src={
+                    importedRecipe.imageUrl.startsWith('http') 
+                      ? `/api/recipes/proxy-image?url=${encodeURIComponent(importedRecipe.imageUrl)}`
+                      : importedRecipe.imageUrl
+                  }
                   alt={importedRecipe.title}
                   style={{
                     maxWidth: '100%',
@@ -177,6 +192,7 @@ const ImportRecipe: React.FC<ImportRecipeProps> = ({ open, onClose }) => {
                     borderRadius: '8px',
                   }}
                   onError={(e) => {
+                    console.warn('Failed to load image:', importedRecipe.imageUrl);
                     e.currentTarget.style.display = 'none';
                   }}
                 />

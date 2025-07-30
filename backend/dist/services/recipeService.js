@@ -172,7 +172,19 @@ function updateRecipe(id, data) {
 }
 function deleteRecipe(id) {
     return __awaiter(this, void 0, void 0, function* () {
-        return prisma.recipe.delete({ where: { id } });
+        // Delete in the correct order to handle foreign key constraints
+        return prisma.$transaction((tx) => __awaiter(this, void 0, void 0, function* () {
+            // First, delete all ratings for this recipe
+            yield tx.rating.deleteMany({ where: { recipeId: id } });
+            // Delete all comments for this recipe
+            yield tx.comment.deleteMany({ where: { recipeId: id } });
+            // Delete all recipe versions for this recipe
+            yield tx.recipeVersion.deleteMany({ where: { recipeId: id } });
+            // Delete all recipe tags for this recipe
+            yield tx.recipeTag.deleteMany({ where: { recipeId: id } });
+            // Finally, delete the recipe itself
+            return tx.recipe.delete({ where: { id } });
+        }));
     });
 }
 function searchRecipesByKeywords(keywords_1) {

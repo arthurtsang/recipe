@@ -153,7 +153,23 @@ export async function updateRecipe(id: string, data: {
 }
 
 export async function deleteRecipe(id: string) {
-  return prisma.recipe.delete({ where: { id } });
+  // Delete in the correct order to handle foreign key constraints
+  return prisma.$transaction(async (tx) => {
+    // First, delete all ratings for this recipe
+    await tx.rating.deleteMany({ where: { recipeId: id } });
+    
+    // Delete all comments for this recipe
+    await tx.comment.deleteMany({ where: { recipeId: id } });
+    
+    // Delete all recipe versions for this recipe
+    await tx.recipeVersion.deleteMany({ where: { recipeId: id } });
+    
+    // Delete all recipe tags for this recipe
+    await tx.recipeTag.deleteMany({ where: { recipeId: id } });
+    
+    // Finally, delete the recipe itself
+    return tx.recipe.delete({ where: { id } });
+  });
 }
 
 export async function searchRecipesByKeywords(keywords: string[], page: number = 1, limit: number = 12) {
