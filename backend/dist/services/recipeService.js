@@ -195,6 +195,7 @@ function searchRecipesByKeywords(keywords_1) {
                 { title: { contains: kw, mode: 'insensitive' } },
                 { description: { contains: kw, mode: 'insensitive' } },
                 { versions: { some: { ingredients: { contains: kw, mode: 'insensitive' } } } },
+                { versions: { some: { instructions: { contains: kw, mode: 'insensitive' } } } },
             ])).flat();
         }
         const recipes = yield prisma.recipe.findMany({

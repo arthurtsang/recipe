@@ -15,6 +15,7 @@ model User {
   picture      String?
   oidcProvider String
   oidcSub      String
+  isEnabled    Boolean   @default(false)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   comments     Comment[]

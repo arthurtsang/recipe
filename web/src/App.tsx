@@ -5,11 +5,14 @@ import RecipeDetail from './pages/RecipeDetail';
 import RecipeForm from './pages/RecipeForm';
 import ImportRecipe from './components/ImportRecipe';
 import RecipeChat from './components/RecipeChat';
+import AdminUserApproval from './components/AdminUserApproval';
+import PendingApproval from './components/PendingApproval';
 import { Container, CssBaseline, AppBar, Toolbar, Typography, Button, Avatar, Menu, MenuItem, IconButton, ListItemIcon, Box, ThemeProvider, Fab } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AddIcon from '@mui/icons-material/Add';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import ChatIcon from '@mui/icons-material/Chat';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import { useTranslation } from 'react-i18next';
 import i18n from './i18n';
 import { theme } from './theme';
@@ -19,6 +22,8 @@ interface User {
   name?: string;
   email: string;
   picture?: string;
+  isAdmin?: boolean;
+  isEnabled?: boolean;
 }
 
 function App() {
@@ -27,6 +32,7 @@ function App() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [adminDialogOpen, setAdminDialogOpen] = useState(false);
   const open = Boolean(anchorEl);
   const { t } = useTranslation();
   const currentLang = i18n.language?.split('-')[0] || 'en';
@@ -54,6 +60,16 @@ function App() {
     i18n.changeLanguage(lng);
     handleMenuClose();
   };
+
+  // Show pending approval screen if user is not enabled
+  if (user && user.isEnabled === false) {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <PendingApproval userEmail={user.email} />
+      </ThemeProvider>
+    );
+  }
 
   return (
     <ThemeProvider theme={theme}>
@@ -126,6 +142,14 @@ function App() {
                   >
                     {currentLang === 'en' ? t('chinese') : t('english')}
                   </MenuItem>
+                  {user.isAdmin && (
+                    <MenuItem onClick={() => setAdminDialogOpen(true)}>
+                      <ListItemIcon>
+                        <AdminPanelSettingsIcon fontSize="small" />
+                      </ListItemIcon>
+                      User Management
+                    </MenuItem>
+                  )}
                   <MenuItem component="a" href="/logout">
                     <ListItemIcon>
                       <LogoutIcon fontSize="small" />
@@ -175,6 +199,11 @@ function App() {
       <RecipeChat
         open={chatOpen}
         onClose={() => setChatOpen(false)}
+      />
+      
+      <AdminUserApproval
+        open={adminDialogOpen}
+        onClose={() => setAdminDialogOpen(false)}
       />
     </ThemeProvider>
   );
