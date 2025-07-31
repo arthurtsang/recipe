@@ -4,6 +4,7 @@ import RecipeList from './pages/RecipeList';
 import RecipeDetail from './pages/RecipeDetail';
 import RecipeForm from './pages/RecipeForm';
 import ImportRecipe from './components/ImportRecipe';
+import ImportHistory from './components/ImportHistory';
 import RecipeChat from './components/RecipeChat';
 import AdminUserApproval from './components/AdminUserApproval';
 import PendingApproval from './components/PendingApproval';
@@ -31,6 +32,7 @@ function App() {
   const location = useLocation();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importHistoryOpen, setImportHistoryOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [adminDialogOpen, setAdminDialogOpen] = useState(false);
   const open = Boolean(anchorEl);
@@ -142,6 +144,12 @@ function App() {
                   >
                     {currentLang === 'en' ? t('chinese') : t('english')}
                   </MenuItem>
+                  <MenuItem onClick={() => setImportHistoryOpen(true)}>
+                    <ListItemIcon>
+                      <FileDownloadIcon fontSize="small" />
+                    </ListItemIcon>
+                    Import History
+                  </MenuItem>
                   {user.isAdmin && (
                     <MenuItem onClick={() => setAdminDialogOpen(true)}>
                       <ListItemIcon>
@@ -194,6 +202,11 @@ function App() {
       <ImportRecipe 
         open={importDialogOpen}
         onClose={() => setImportDialogOpen(false)}
+      />
+      
+      <ImportHistory
+        open={importHistoryOpen}
+        onClose={() => setImportHistoryOpen(false)}
       />
       
       <RecipeChat

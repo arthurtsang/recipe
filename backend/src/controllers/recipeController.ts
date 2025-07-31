@@ -173,7 +173,7 @@ async function downloadAndSaveImage(imageUrl: string): Promise<string> {
 
 export async function createRecipe(req: Request, res: Response) {
   try {
-    const { title, description, ingredients, instructions, imageUrl, tags } = req.body;
+    const { title, description, ingredients, instructions, imageUrl, tags, cookTime, difficulty, timeReasoning, difficultyReasoning } = req.body;
     
     // Debug: Log the entire OIDC object
     console.log('OIDC object:', JSON.stringify((req as any).oidc, null, 2));
@@ -195,6 +195,10 @@ export async function createRecipe(req: Request, res: Response) {
         description,
         imageUrl: localImageUrl,
         userId: dbUser.id,
+        estimatedTime: cookTime, // Map cookTime to estimatedTime for database compatibility
+        difficulty,
+        timeReasoning,
+        difficultyReasoning,
       },
       include: {
         user: true,
@@ -239,7 +243,7 @@ export async function createRecipe(req: Request, res: Response) {
 export async function updateRecipe(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const { title, description, ingredients, instructions, imageUrl, tags } = req.body;
+    const { title, description, ingredients, instructions, imageUrl, tags, cookTime, difficulty } = req.body;
     
     // Use the same authentication pattern as rateRecipe and createRecipe
     if (!req.oidc?.user?.email) return res.status(401).json({ error: 'Not authenticated' });
@@ -274,6 +278,8 @@ export async function updateRecipe(req: Request, res: Response) {
         title,
         description,
         imageUrl: localImageUrl,
+        estimatedTime: cookTime, // Map cookTime to estimatedTime for database compatibility
+        difficulty,
       },
     });
 

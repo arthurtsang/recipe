@@ -32,6 +32,15 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const recipeController = __importStar(require("../controllers/recipeController"));
@@ -54,4 +63,16 @@ router.get('/user/:alias', recipeController.getRecipesByAlias);
 router.post('/import', (0, express_openid_connect_1.requiresAuth)(), recipeController.importRecipe);
 router.post('/auto-category', (0, express_openid_connect_1.requiresAuth)(), recipeController.autoCategory);
 router.post('/chat', recipeController.chat);
+// Test endpoint to trigger recipe analysis (for development)
+router.post('/test-analysis', (0, express_openid_connect_1.requiresAuth)(), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { processRecipeAnalysisQueue } = yield Promise.resolve().then(() => __importStar(require('../services/recipeAnalysisService')));
+        yield processRecipeAnalysisQueue();
+        res.json({ message: 'Recipe analysis queue processed' });
+    }
+    catch (error) {
+        console.error('Error triggering recipe analysis:', error);
+        res.status(500).json({ error: 'Failed to trigger recipe analysis' });
+    }
+}));
 exports.default = router;

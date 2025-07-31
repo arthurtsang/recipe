@@ -16,7 +16,7 @@ dotenv.config();
 
 const app = express();
 app.set('trust proxy', 1);
-const prisma = new PrismaClient();
+export const prisma = new PrismaClient();
 const allowedEmails = (process.env.ALLOWED_EMAILS || '').split(',').map(e => e.trim().toLowerCase());
 
 app.use((req, res, next) => {
@@ -94,7 +94,7 @@ app.use(auth({
 }));
 
 // Middleware to check if user is enabled
-const requiresEnabledUser = () => {
+export const requiresEnabledUser = () => {
   return (req: any, res: any, next: any) => {
     if (!req.oidc?.user?.email) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -214,9 +214,13 @@ app.get('/api/health', (req, res) => {
 const uploadsPath = path.resolve(__dirname, '../uploads');
 app.use('/uploads', express.static(uploadsPath));
 
+// Import job routes
+import importJobRoutes from './routes/importJobs';
+
 // Protect recipe creation and editing/
 app.use('/api/recipes', recipeRoutes);
 app.use('/api/tags', tagRoutes);
+app.use('/api/imports', importJobRoutes);
 
 // Serve static files from the React app
 app.use(express.static(path.join(__dirname, '../../web/dist')));
@@ -226,7 +230,13 @@ app.get(/^\/(?!api|uploads|auth).*/, (req, res) => {
   res.sendFile(path.join(__dirname, '../../web/dist', 'index.html'));
 });
 
+// Start recipe analysis scheduler
+import { startRecipeAnalysisScheduler } from './services/recipeAnalysisService';
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
+  
+  // Start the background recipe analysis scheduler
+  startRecipeAnalysisScheduler();
 });

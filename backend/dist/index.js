@@ -45,7 +45,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.prisma = void 0;
+exports.requiresEnabledUser = exports.prisma = void 0;
 const express_1 = __importDefault(require("express"));
 const client_1 = require("@prisma/client");
 const dotenv_1 = __importDefault(require("dotenv"));
@@ -56,11 +56,11 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const cors_1 = __importDefault(require("cors"));
 const userService = __importStar(require("./services/userService"));
 const tags_1 = __importDefault(require("./routes/tags"));
-exports.prisma = new client_1.PrismaClient();
 // Load environment variables
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 app.set('trust proxy', 1);
+exports.prisma = new client_1.PrismaClient();
 const allowedEmails = (process.env.ALLOWED_EMAILS || '').split(',').map(e => e.trim().toLowerCase());
 app.use((req, res, next) => {
     console.log(`[${req.method}] ${req.originalUrl}`);
@@ -157,6 +157,7 @@ const requiresEnabledUser = () => {
         });
     };
 };
+exports.requiresEnabledUser = requiresEnabledUser;
 // Middleware to check if user is admin
 const requiresAdmin = () => {
     return (req, res, next) => {
@@ -235,16 +236,23 @@ app.get('/api/health', (req, res) => {
 });
 const uploadsPath = path_1.default.resolve(__dirname, '../uploads');
 app.use('/uploads', express_1.default.static(uploadsPath));
+// Import job routes
+const importJobs_1 = __importDefault(require("./routes/importJobs"));
 // Protect recipe creation and editing/
 app.use('/api/recipes', recipes_1.default);
 app.use('/api/tags', tags_1.default);
+app.use('/api/imports', importJobs_1.default);
 // Serve static files from the React app
 app.use(express_1.default.static(path_1.default.join(__dirname, '../../web/dist')));
 // For any route not handled by your API, serve index.html (for React Router)
 app.get(/^\/(?!api|uploads|auth).*/, (req, res) => {
     res.sendFile(path_1.default.join(__dirname, '../../web/dist', 'index.html'));
 });
+// Start recipe analysis scheduler
+const recipeAnalysisService_1 = require("./services/recipeAnalysisService");
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    // Start the background recipe analysis scheduler
+    (0, recipeAnalysisService_1.startRecipeAnalysisScheduler)();
 });

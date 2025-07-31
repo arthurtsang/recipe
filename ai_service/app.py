@@ -6,12 +6,19 @@ from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from transformers import pipeline
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
+import asyncio
+import uvicorn
+import sys
+
+# Add the current directory to the Python path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Import our modular services
 from models.model_loader import load_model_and_tokenizer
 from services.import_service import ImportRecipeRequest, ImportRecipeResponse, import_recipe_from_url
 from services.chat_service import ChatRequest, ChatResponse, process_chat_request
+from services.recipe_analysis_service import get_recipe_analysis_service
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -123,6 +130,34 @@ async def auto_category(request: AutoCategoryRequest = Body(...)):
     return AutoCategoryResponse(categories=categories or [results[0][0]["label"]])
 
 
+# Recipe analysis endpoint
+class RecipeAnalysisRequest(BaseModel):
+    title: str
+    description: Optional[str] = None
+    ingredients: str
+    instructions: str
+
+
+@app.post("/analyze-recipe")
+async def analyze_recipe(request: RecipeAnalysisRequest):
+    """Analyze a recipe and return insights."""
+    if not model or not tokenizer:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    
+    recipe_data = {
+        "title": request.title,
+        "description": request.description or "",
+        "ingredients": request.ingredients,
+        "instructions": request.instructions
+    }
+    
+    try:
+        analysis = await get_recipe_analysis_service(model, tokenizer).analyze_recipe(recipe_data)
+        return analysis
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Recipe analysis failed: {e}")
+
+
 # Health check endpoint
 @app.get("/health")
 async def health_check():
@@ -137,5 +172,4 @@ async def health_check():
 
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001) 

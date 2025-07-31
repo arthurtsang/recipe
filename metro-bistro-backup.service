@@ -1,0 +1,14 @@
+[Unit]
+Description=Metro Bistro Backup Service
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/home/tsangc1/Projects/recipe
+ExecStart=/home/tsangc1/Projects/recipe/backup-metro-bistro.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target 

@@ -22,4 +22,16 @@ router.post('/import', requiresAuth(), recipeController.importRecipe);
 router.post('/auto-category', requiresAuth(), recipeController.autoCategory);
 router.post('/chat', recipeController.chat);
 
+// Test endpoint to trigger recipe analysis (for development)
+router.post('/test-analysis', requiresAuth(), async (req, res) => {
+  try {
+    const { processRecipeAnalysisQueue } = await import('../services/recipeAnalysisService');
+    await processRecipeAnalysisQueue();
+    res.json({ message: 'Recipe analysis queue processed' });
+  } catch (error) {
+    console.error('Error triggering recipe analysis:', error);
+    res.status(500).json({ error: 'Failed to trigger recipe analysis' });
+  }
+});
+
 export default router; 

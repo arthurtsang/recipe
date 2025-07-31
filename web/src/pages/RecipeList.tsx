@@ -11,6 +11,14 @@ interface Recipe {
   imageUrl?: string;
   user?: { name?: string; email: string };
   averageRating?: number | null;
+  estimatedTime?: string;
+  difficulty?: string;
+  timeReasoning?: string;
+  difficultyReasoning?: string;
+  versions?: Array<{
+    ingredients: string;
+    instructions: string;
+  }>;
 }
 
 export default function RecipeList() {
@@ -49,6 +57,7 @@ export default function RecipeList() {
         return res.json();
       })
       .then(data => {
+        console.log('RecipeList Debug - API Response:', data);
         setRecipes(prev => page === 1 ? data : [...prev, ...data]);
         setHasMore(data.length === pageSize);
       })

@@ -18,11 +18,21 @@ export async function getAllPublicRecipes(q?: string, page: number = 1, limit: n
       title: true,
       description: true,
       imageUrl: true,
+      estimatedTime: true,
+      difficulty: true,
+      timeReasoning: true,
+      difficultyReasoning: true,
       user: {
         select: {
           id: true,
           name: true,
           email: true,
+        },
+      },
+      versions: {
+        select: {
+          ingredients: true,
+          instructions: true,
         },
       },
       createdAt: true,

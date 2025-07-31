@@ -115,8 +115,14 @@ def extract_json_from_markdown(markdown_text):
     if description_match:
         data["description"] = description_match.group(1).strip()
     
-    # Extract ingredients
+    # Extract ingredients (more flexible pattern)
     ingredients_match = re.search(r'## Ingredients\n(.+?)(?:\n## |$)', markdown_text, re.DOTALL)
+    if not ingredients_match:
+        # Try alternative patterns
+        ingredients_match = re.search(r'Ingredients:\n(.+?)(?:\nInstructions:|$)', markdown_text, re.DOTALL)
+    if not ingredients_match:
+        ingredients_match = re.search(r'Ingredients\n(.+?)(?:\nInstructions|$)', markdown_text, re.DOTALL)
+    
     if ingredients_match:
         ingredients_text = ingredients_match.group(1).strip()
         ingredients_list = [
@@ -126,8 +132,14 @@ def extract_json_from_markdown(markdown_text):
         ]
         data["ingredients"] = ingredients_list
     
-    # Extract instructions
+    # Extract instructions (more flexible pattern)
     instructions_match = re.search(r'## Instructions\n(.+?)(?:\n## |$)', markdown_text, re.DOTALL)
+    if not instructions_match:
+        # Try alternative patterns
+        instructions_match = re.search(r'Instructions:\n(.+?)(?:\n## |$)', markdown_text, re.DOTALL)
+    if not instructions_match:
+        instructions_match = re.search(r'Instructions\n(.+?)(?:\n## |$)', markdown_text, re.DOTALL)
+    
     if instructions_match:
         instructions_text = instructions_match.group(1).strip()
         instructions_list = []

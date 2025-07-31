@@ -221,7 +221,7 @@ function createRecipe(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
         var _a, _b;
         try {
-            const { title, description, ingredients, instructions, imageUrl, tags } = req.body;
+            const { title, description, ingredients, instructions, imageUrl, tags, cookTime, difficulty, timeReasoning, difficultyReasoning } = req.body;
             // Debug: Log the entire OIDC object
             console.log('OIDC object:', JSON.stringify(req.oidc, null, 2));
             // Use the same authentication pattern as rateRecipe
@@ -240,6 +240,10 @@ function createRecipe(req, res) {
                     description,
                     imageUrl: localImageUrl,
                     userId: dbUser.id,
+                    estimatedTime: cookTime, // Map cookTime to estimatedTime for database compatibility
+                    difficulty,
+                    timeReasoning,
+                    difficultyReasoning,
                 },
                 include: {
                     user: true,
@@ -284,7 +288,7 @@ function updateRecipe(req, res) {
         var _a, _b;
         try {
             const { id } = req.params;
-            const { title, description, ingredients, instructions, imageUrl, tags } = req.body;
+            const { title, description, ingredients, instructions, imageUrl, tags, cookTime, difficulty } = req.body;
             // Use the same authentication pattern as rateRecipe and createRecipe
             if (!((_b = (_a = req.oidc) === null || _a === void 0 ? void 0 : _a.user) === null || _b === void 0 ? void 0 : _b.email))
                 return res.status(401).json({ error: 'Not authenticated' });
@@ -314,6 +318,8 @@ function updateRecipe(req, res) {
                     title,
                     description,
                     imageUrl: localImageUrl,
+                    estimatedTime: cookTime, // Map cookTime to estimatedTime for database compatibility
+                    difficulty,
                 },
             });
             // Update the current version

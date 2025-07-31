@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Paper, Typography, Box, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemButton, ListItemText, Checkbox, FormControlLabel, Rating } from '@mui/material';
+import { Paper, Typography, Box, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemButton, ListItemText, Checkbox, FormControlLabel, Rating, Alert, Slide } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 
 interface User {
@@ -26,6 +26,8 @@ interface Recipe {
   title: string;
   description?: string;
   imageUrl?: string;
+  estimatedTime?: string;
+  difficulty?: string;
   user: { id: string; name?: string; email: string };
   versions: Version[];
 }
@@ -46,6 +48,9 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   const [createNewVersion, setCreateNewVersion] = useState(true);
   const [averageRating, setAverageRating] = useState<number | null>(null);
   const [userRating, setUserRating] = useState<number | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [originalFields, setOriginalFields] = useState<Version | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -90,9 +95,10 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     setEditFields({ ...versions[idx], title: recipe.title, description: recipe.description, imageUrl: recipe.imageUrl });
   };
 
-  // Handle field changes
-  const handleFieldChange = (field: keyof Version, value: string) => {
-    setEditFields(prev => prev ? { ...prev, [field]: value } : null);
+  // Edit button handler to enter edit mode
+  const handleEdit = () => {
+    setIsEditing(true);
+    setOriginalFields(editFields);
   };
 
   // Open save dialog and set default version name
@@ -102,14 +108,40 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     setSaveDialogOpen(true);
   };
 
-  // Save (create new version or update current)
+  // Field change handler
+  const handleFieldChange = (field: keyof Version, value: string) => {
+    setEditFields((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, [field]: value };
+      if (isEditing && originalFields) {
+        setHasUnsavedChanges(JSON.stringify(updated) !== JSON.stringify(originalFields));
+      }
+      return updated;
+    });
+  };
+
+
+
+  // Save handler
   const handleSave = async () => {
     setSaveDialogOpen(false);
     if (!editFields) return;
     try {
       const payload = createNewVersion
-        ? { ...editFields, versionName, createNewVersion: true }
-        : { ...editFields, createNewVersion: false, versionId: selectedVersion.id };
+        ? { 
+            ...editFields, 
+            versionName, 
+            createNewVersion: true,
+            cookTime: recipe?.estimatedTime, // Map estimatedTime to cookTime for backend
+            difficulty: recipe?.difficulty
+          }
+        : { 
+            ...editFields, 
+            createNewVersion: false, 
+            versionId: selectedVersion.id,
+            cookTime: recipe?.estimatedTime, // Map estimatedTime to cookTime for backend
+            difficulty: recipe?.difficulty
+          };
       const res = await fetch(`/api/recipes/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -119,6 +151,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       if (!res.ok) throw new Error('Failed to save');
       const data = await res.json();
       setRecipe(data);
+      
       // Find the new/updated version index
       let newIdx = 0;
       if (!createNewVersion && selectedVersion.id && data.versions && data.versions.length > 0) {
@@ -129,24 +162,41 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
         newIdx = 0; // Assume new version is first
       }
       
-      // Only set edit fields if versions exist
+      // Update edit fields with the saved data
+      let updatedEditFields;
       if (data.versions && data.versions.length > 0) {
         setSelectedVersionIdx(newIdx);
-        setEditFields({ ...data.versions[newIdx], title: data.title, description: data.description, imageUrl: data.imageUrl });
-      } else {
-        // Handle case where there are no versions
-        setSelectedVersionIdx(0);
-        setEditFields({ 
+        updatedEditFields = { 
+          ...data.versions[newIdx], 
           title: data.title, 
           description: data.description, 
-          imageUrl: data.imageUrl,
-          ingredients: '',
-          instructions: ''
-        });
+          imageUrl: data.imageUrl 
+        };
+      } else {
+        // Handle case where there are no versions - use the current editFields
+        setSelectedVersionIdx(0);
+        updatedEditFields = { 
+          ...editFields,
+          title: data.title, 
+          description: data.description, 
+          imageUrl: data.imageUrl
+        };
       }
+      
+      setEditFields(updatedEditFields);
+      setOriginalFields(updatedEditFields);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     }
+    setIsEditing(false);
+    setHasUnsavedChanges(false);
+  };
+
+  // Cancel handler
+  const handleCancel = () => {
+    if (originalFields) setEditFields(originalFields);
+    setIsEditing(false);
+    setHasUnsavedChanges(false);
   };
 
   // Handle rating change
@@ -207,21 +257,37 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   return (
     <Paper sx={{ p: 4, maxWidth: 900, mx: 'auto', width: '100%' }}>
       <Button variant="text" onClick={handleBack} sx={{ mb: 2 }}>&larr; {t('back')}</Button>
-      {/* Title: editable for owner, static for others */}
-      {isOwner ? (
-        <TextField
-          value={editFields?.title || ''}
-          onChange={e => handleFieldChange('title', e.target.value)}
-          variant="standard"
-          fullWidth
-          InputProps={{ disableUnderline: true, style: { fontSize: 32, fontWeight: 600 } }}
-          sx={{ mb: 2 }}
-        />
-      ) : (
-        <Typography variant="h4" gutterBottom sx={{ mb: 2 }}>
-          {recipe.title}
-        </Typography>
-      )}
+      {/* Main content area */}
+      <Box>
+        {/* Unsaved changes banner */}
+        <Slide direction="down" in={hasUnsavedChanges} mountOnEnter unmountOnExit>
+          <Alert
+            severity="warning"
+            action={
+              <Button color="inherit" size="small" onClick={handleCancel}>
+                Cancel
+              </Button>
+            }
+            sx={{ mb: 2, position: 'sticky', top: 0, zIndex: 1000 }}
+          >
+            You have unsaved changes
+          </Alert>
+        </Slide>
+        {isOwner && isEditing ? (
+          <TextField
+            value={editFields?.title || ''}
+            onChange={e => handleFieldChange('title', e.target.value)}
+            variant="standard"
+            fullWidth
+            InputProps={{ disableUnderline: true, style: { fontSize: 32, fontWeight: 600 } }}
+            sx={{ mb: 2 }}
+          />
+        ) : (
+          <Typography variant="h4" gutterBottom sx={{ mb: 2 }}>
+            {editFields?.title || recipe.title}
+          </Typography>
+        )}
+      </Box>
       {/* Image preview */}
       {imageUrl && <Box mb={2}><img src={imageUrl} alt={editFields?.title || recipe?.title || ''} style={{ maxWidth: 400, width: '100%' }} /></Box>}
       {/* Image upload for owner, now below the image */}
@@ -265,7 +331,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
         </Typography>
       </Box>
       <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-        {isOwner ? (
+        {isOwner && isEditing ? (
           <TextField
             value={editFields?.description || ''}
             onChange={e => handleFieldChange('description', e.target.value)}
@@ -275,12 +341,78 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
             InputProps={{ disableUnderline: true, style: { fontSize: 18 } }}
           />
         ) : (
-          selectedVersion.description
+          editFields?.description || selectedVersion.description
         )}
       </Typography>
+
+      {/* Recipe metadata */}
+      <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+        <Box>
+          <Typography variant="subtitle2" color="text.secondary">
+            Cook Time:
+          </Typography>
+          {isOwner && isEditing ? (
+            <TextField
+              type="number"
+              value={recipe?.estimatedTime || ''}
+              onChange={(e) => {
+                setRecipe(prev => prev ? { ...prev, estimatedTime: e.target.value } : null);
+              }}
+              size="small"
+              sx={{ minWidth: 120 }}
+              placeholder="Enter minutes"
+              label="Minutes"
+              inputProps={{ min: 1, max: 480 }}
+            />
+          ) : (
+            <Typography variant="body1">
+              {recipe?.estimatedTime ? (() => {
+                const minutes = parseInt(recipe.estimatedTime);
+                if (minutes >= 60) {
+                  const hours = Math.floor(minutes / 60);
+                  const remainingMins = minutes % 60;
+                  if (remainingMins === 0) {
+                    return `${hours}h`;
+                  } else {
+                    return `${hours}h ${remainingMins}m`;
+                  }
+                } else {
+                  return `${minutes}m`;
+                }
+              })() : 'Pending...'}
+            </Typography>
+          )}
+        </Box>
+        
+        <Box>
+          <Typography variant="subtitle2" color="text.secondary">
+            Difficulty:
+          </Typography>
+          {isOwner && isEditing ? (
+            <TextField
+              select
+              value={recipe?.difficulty || ''}
+              onChange={(e) => {
+                setRecipe(prev => prev ? { ...prev, difficulty: e.target.value } : null);
+              }}
+              size="small"
+              sx={{ minWidth: 120 }}
+            >
+              <option value="">Undetermined</option>
+              <option value="Easy">Easy</option>
+              <option value="Medium">Medium</option>
+              <option value="Advanced">Advanced</option>
+            </TextField>
+          ) : (
+            <Typography variant="body1">
+              {recipe?.difficulty || 'Undetermined'}
+            </Typography>
+          )}
+        </Box>
+      </Box>
       <Typography variant="h6" mt={2}>{t('ingredients')}</Typography>
       <Box component="pre" sx={{ background: '#f5f5f5', p: 2, borderRadius: 1, overflowX: 'auto' }}>
-        {isOwner ? (
+        {isOwner && isEditing ? (
           <TextField
             value={editFields?.ingredients || ''}
             onChange={e => handleFieldChange('ingredients', e.target.value)}
@@ -290,12 +422,12 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
             InputProps={{ disableUnderline: true, style: { fontFamily: 'inherit', fontSize: 16 } }}
           />
         ) : (
-          selectedVersion.ingredients
+          editFields?.ingredients || selectedVersion.ingredients
         )}
       </Box>
       <Typography variant="h6" mt={2}>{t('instructions')}</Typography>
       <Box component="pre" sx={{ background: '#f5f5f5', p: 2, borderRadius: 1, overflowX: 'auto' }}>
-        {isOwner ? (
+        {isOwner && isEditing ? (
           <TextField
             value={editFields?.instructions || ''}
             onChange={e => handleFieldChange('instructions', e.target.value)}
@@ -305,16 +437,27 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
             InputProps={{ disableUnderline: true, style: { fontFamily: 'inherit', fontSize: 16 } }}
           />
         ) : (
-          selectedVersion.instructions
+          <Box component="ol" sx={{ m: 0, pl: 2 }}>
+            {(editFields?.instructions || selectedVersion.instructions)
+              .split('\n')
+              .filter(line => line.trim())
+              .map((instruction, index) => (
+                <Typography key={index} component="li" sx={{ mb: 1, fontSize: 16 }}>
+                  {instruction.trim()}
+                </Typography>
+              ))}
+          </Box>
         )}
       </Box>
       <Box sx={{ fontSize: '0.9em', color: 'text.secondary', mt: 2 }}>
         {t('by')}: {recipe.user?.name || recipe.user?.email}
       </Box>
       {/* Versions List */}
-      {versions.length > 1 && (
+      {versions.length > 0 && (
         <Box mt={3} mb={2} sx={{ position: 'relative' }}>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>{t('versions')}:</Typography>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            {versions.length > 1 ? t('versions') : t('version')} ({versions.length}):
+          </Typography>
           <Box sx={{ position: 'relative', overflowX: 'auto', maxWidth: '100%' }}>
             <List dense sx={{ display: 'flex', flexDirection: 'row', gap: 1, p: 0, minHeight: 48 }}>
               {versions.map((v: Version, idx: number) => (
@@ -325,14 +468,24 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
                 </ListItem>
               ))}
             </List>
-            <Box sx={{ position: 'absolute', top: 0, right: 0, width: 32, height: '100%', pointerEvents: 'none', background: 'linear-gradient(to left, #fff, rgba(255,255,255,0))' }} />
+            {versions.length > 3 && (
+              <Box sx={{ position: 'absolute', top: 0, right: 0, width: 32, height: '100%', pointerEvents: 'none', background: 'linear-gradient(to left, #fff, rgba(255,255,255,0))' }} />
+            )}
           </Box>
         </Box>
       )}
       {/* Owner controls */}
       {isOwner && (
         <Box mt={3} display="flex" gap={2}>
-          <Button variant="contained" color="primary" onClick={handleOpenSaveDialog}>{t('save')}</Button>
+          {!isEditing ? (
+            <Button variant="contained" color="primary" onClick={handleEdit}>
+              {t('edit', 'Edit')}
+            </Button>
+          ) : (
+            <Button variant="contained" color="primary" onClick={handleOpenSaveDialog}>
+              {t('save', 'Save')}
+            </Button>
+          )}
           <Button variant="outlined" color="error" onClick={() => setDeleteDialogOpen(true)} disabled={deleting}>{t('delete')}</Button>
         </Box>
       )}
