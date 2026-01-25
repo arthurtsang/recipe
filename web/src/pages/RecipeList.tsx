@@ -52,9 +52,27 @@ export default function RecipeList() {
     setLoading(true);
     const pageSize = 12;
     fetch(`/api/recipes${query ? `?q=${encodeURIComponent(query)}` : ''}${query ? '&' : '?'}page=${page}&limit=${pageSize}`)
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to fetch');
-        return res.json();
+      .then(async res => {
+        if (!res.ok) {
+          let errorMessage = 'Failed to fetch recipes';
+          try {
+            const text = await res.text();
+            if (text) {
+              const errorData = JSON.parse(text);
+              errorMessage = errorData.error || errorData.message || errorMessage;
+            } else {
+              errorMessage = `HTTP ${res.status}: ${res.statusText || 'Unknown error'}`;
+            }
+          } catch (e) {
+            errorMessage = `HTTP ${res.status}: ${res.statusText || 'Unknown error'}`;
+          }
+          throw new Error(errorMessage);
+        }
+        const text = await res.text();
+        if (!text) {
+          throw new Error('Empty response from server');
+        }
+        return JSON.parse(text);
       })
       .then(data => {
         console.log('RecipeList Debug - API Response:', data);

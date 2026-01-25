@@ -40,7 +40,7 @@ export async function analyzeRecipeWithAI(recipeId: string): Promise<RecipeAnaly
 
     // Call AI service
     const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
-    const response = await axios.post(`${aiServiceUrl}/analyze-recipe`, analysisData);
+    const response = await axios.post(`${aiServiceUrl}/recipe/analyze`, analysisData);
 
     const analysis: RecipeAnalysis = response.data;
 

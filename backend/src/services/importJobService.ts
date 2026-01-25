@@ -65,7 +65,7 @@ export async function processImportJob(jobId: string): Promise<void> {
 
     // Call AI service to import recipe
     const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
-    const response = await axios.post(`${aiServiceUrl}/import-recipe`, {
+    const response = await axios.post(`${aiServiceUrl}/recipe/import`, {
       url: job.url,
     });
 

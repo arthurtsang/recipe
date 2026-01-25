@@ -133,11 +133,26 @@ const ImportRecipe: React.FC<ImportRecipeProps> = ({ open, onClose }) => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to start import');
+        let errorMessage = 'Failed to start import';
+        try {
+          const text = await response.text();
+          if (text) {
+            const errorData = JSON.parse(text);
+            errorMessage = errorData.error || errorMessage;
+          } else {
+            errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+          }
+        } catch (e) {
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
 
-      const data = await response.json();
+      const text = await response.text();
+      if (!text) {
+        throw new Error('Empty response from server');
+      }
+      const data = JSON.parse(text);
       
       // Add new job to active jobs
       const newJob: JobStatus = {

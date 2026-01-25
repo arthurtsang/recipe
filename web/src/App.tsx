@@ -183,21 +183,23 @@ function App() {
         </Routes>
       </Container>
       
-      {/* Chat Floating Action Button */}
-      <Fab
-        color="primary"
-        aria-label="chat"
-        onClick={() => setChatOpen(true)}
-        sx={{
-          position: 'fixed',
-          bottom: 24,
-          right: 24,
-          zIndex: 1000,
-          boxShadow: '0 4px 20px rgba(210, 105, 30, 0.3)',
-        }}
-      >
-        <ChatIcon />
-      </Fab>
+      {/* Chat Floating Action Button - Only show for authenticated users */}
+      {user && (
+        <Fab
+          color="primary"
+          aria-label="chat"
+          onClick={() => setChatOpen(true)}
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            zIndex: 1000,
+            boxShadow: '0 4px 20px rgba(210, 105, 30, 0.3)',
+          }}
+        >
+          <ChatIcon />
+        </Fab>
+      )}
       
       <ImportRecipe 
         open={importDialogOpen}

@@ -17,7 +17,7 @@
   "type": "commonjs",
   "dependencies": {
     "@mui/icons-material": "^7.2.0",
-    "@prisma/client": "^6.11.1",
+    "@prisma/client": "^6.19.2",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/node": "^24.0.13",
@@ -39,6 +39,7 @@
     "chokidar-cli": "^3.0.0",
     "concurrently": "^9.2.0",
     "nodemon": "^3.1.10",
+    "prisma": "^6.19.2",
     "tsx": "^4.20.3"
   }
 }

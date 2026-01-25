@@ -20,7 +20,7 @@ router.post('/set-alias', requiresAuth(), recipeController.setAlias);
 router.get('/user/:alias', recipeController.getRecipesByAlias);
 router.post('/import', requiresAuth(), recipeController.importRecipe);
 router.post('/auto-category', requiresAuth(), recipeController.autoCategory);
-router.post('/chat', recipeController.chat);
+router.post('/chat', requiresAuth(), recipeController.chat);
 
 // Test endpoint to trigger recipe analysis (for development)
 router.post('/test-analysis', requiresAuth(), async (req, res) => {

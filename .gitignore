@@ -6,3 +6,8 @@ uploads/
 __pycache__/
 
 .venv
+
+# Build outputs
+backend/dist/
+web/dist/
+*.tsbuildinfo

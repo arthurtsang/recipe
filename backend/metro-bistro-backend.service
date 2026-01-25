@@ -10,7 +10,7 @@ Group=tsangc1
 WorkingDirectory=/home/tsangc1/Projects/recipe/backend
 Environment=PATH=/home/tsangc1/Projects/recipe/.venv/bin:/usr/local/bin:/usr/bin:/bin
 Environment=NODE_ENV=production
-Environment=PORT=4000
+Environment=PORT=8081
 ExecStartPre=/usr/bin/npm install
 ExecStartPre=/usr/bin/npx prisma generate
 ExecStartPre=/usr/bin/npx prisma migrate deploy

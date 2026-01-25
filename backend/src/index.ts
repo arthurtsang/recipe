@@ -222,11 +222,23 @@ app.use('/api/recipes', recipeRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/imports', importJobRoutes);
 
-// Serve static files from the React app
-app.use(express.static(path.join(__dirname, '../../web/dist')));
+// Serve static files from the React app (but exclude API routes)
+app.use(express.static(path.join(__dirname, '../../web/dist'), {
+  index: false, // Don't serve index.html for directory requests
+}));
+
+// 404 handler for API routes (must be after all other routes)
+app.use('/api', (req, res) => {
+  console.log(`[404] API route not found: ${req.method} ${req.originalUrl}`);
+  res.status(404).json({ 
+    error: 'Not Found', 
+    path: req.originalUrl,
+    message: 'API endpoint not found'
+  });
+});
 
 // For any route not handled by your API, serve index.html (for React Router)
-app.get(/^\/(?!api|uploads|auth).*/, (req, res) => {
+app.get(/^\/(?!api|uploads|auth|static).*/, (req, res) => {
   res.sendFile(path.join(__dirname, '../../web/dist', 'index.html'));
 });
 

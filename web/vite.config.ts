@@ -7,8 +7,9 @@ export default defineConfig({
   server: {
     allowedHosts: ['recipe.youramaryllis.com'],
     proxy: {
-      '/recipes': 'http://localhost:4000',
-      '/uploads': 'http://localhost:4000',
+      '/api': 'http://localhost:8081',
+      '/uploads': 'http://localhost:8081',
+      '/auth': 'http://localhost:8081',
     },
   },
 })

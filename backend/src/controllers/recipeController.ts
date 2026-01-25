@@ -464,7 +464,7 @@ export async function importRecipe(req: Request, res: Response) {
     
     // Call AI service to import recipe from external site
     const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
-    const response = await axios.post(`${aiServiceUrl}/import-recipe`, { url });
+    const response = await axios.post(`${aiServiceUrl}/recipe/import`, { url });
     
     const importedData = response.data;
     
@@ -490,7 +490,7 @@ export async function autoCategory(req: Request, res: Response) {
     }
     // Call AI service for category prediction
     const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
-    const response = await axios.post(`${aiServiceUrl}/auto-category`, { title, description, ingredients, instructions });
+    const response = await axios.post(`${aiServiceUrl}/recipe/auto-category`, { title, description, ingredients, instructions });
     res.status(200).json(response.data);
   } catch (err: unknown) {
     if (err && typeof err === 'object' && 'response' in err) {
@@ -513,7 +513,7 @@ export async function chat(req: Request, res: Response) {
     
     // Call AI service for chat
     const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
-    const response = await axios.post(`${aiServiceUrl}/chat`, { question });
+    const response = await axios.post(`${aiServiceUrl}/recipe/chat`, { question });
     res.status(200).json(response.data);
   } catch (err: unknown) {
     if (err && typeof err === 'object' && 'response' in err) {

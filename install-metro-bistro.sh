@@ -28,7 +28,7 @@ echo ""
 
 # Install AI Server
 echo "2. Installing AI Server..."
-cd /home/tsangc1/Projects/recipe/ai_service
+cd /home/tsangc1/Projects/ai_service
 sudo cp ai-server.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable ai-server
@@ -66,6 +66,6 @@ echo "To check status of all services:"
 echo "  ./check-all-services.sh"
 echo ""
 echo "Individual service management:"
-echo "  • AI: cd ai_service && ./manage-service.sh {start|stop|restart|status}"
+echo "  • AI: cd /home/tsangc1/Projects/ai_service && ./manage-service.sh {start|stop|restart|status}"
 echo "  • Backend: cd backend && ./manage-backend.sh {start|stop|restart|status}"
 echo "  • UI: cd web && ./manage-ui.sh {start|stop|restart|status}" 
