@@ -5,7 +5,14 @@ import { requiresEnabledUser } from '../index';
 const router = express.Router();
 
 // Start a new import job
-router.post('/start', requiresEnabledUser(), startImport);
+router.post('/start', requiresEnabledUser(), async (req, res, next) => {
+  console.log('[ROUTE] /api/imports/start hit, calling startImport');
+  try {
+    await startImport(req, res);
+  } catch (error) {
+    next(error);
+  }
+});
 
 // Get status of a specific import job
 router.get('/status/:jobId', requiresEnabledUser(), getImportStatus);

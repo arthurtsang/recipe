@@ -74,10 +74,25 @@ export async function getRecipeById(req: Request, res: Response) {
     console.log('Recipe loaded', recipe);
     
     // Use the current request's host instead of hardcoded BASE_URL
+    // Prefer X-Forwarded-Host (from proxy) or Origin header, fallback to host
+    const forwardedHost = req.get('x-forwarded-host');
+    const origin = req.get('origin');
+    const protocol = req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http');
+    const host = forwardedHost || (origin ? new URL(origin).host : req.get('host'));
+    
+    // Fix recipe imageUrl
     if (recipe.imageUrl?.startsWith('/uploads/')) {
-      const protocol = req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http');
-      const host = req.get('host');
       recipe.imageUrl = `${protocol}://${host}${recipe.imageUrl}`;
+    }
+    
+    // Fix version imageUrls
+    if (recipe.versions) {
+      recipe.versions = recipe.versions.map((version: any) => {
+        if (version.imageUrl?.startsWith('/uploads/')) {
+          version.imageUrl = `${protocol}://${host}${version.imageUrl}`;
+        }
+        return version;
+      });
     }
     
     res.json(recipe);
@@ -122,58 +137,67 @@ async function downloadAndSaveImage(imageUrl: string): Promise<string> {
     // Download image
     const client = url.protocol === 'https:' ? https : http;
     
-    return new Promise((resolve, reject) => {
-      // Configure request options with SSL certificate ignore
-      const requestOptions = {
-        timeout: 10000,
-        // Ignore SSL certificate errors for sites with self-signed certificates
-        rejectUnauthorized: false
-      };
-      
-      const request = client.get(imageUrl, requestOptions, (response) => {
-        if (response.statusCode !== 200) {
-          console.warn(`Failed to download image from ${imageUrl}: HTTP ${response.statusCode}. Using original URL.`);
-          // For any non-200 status, fall back to original URL instead of failing
-          resolve(imageUrl);
-          return;
-        }
+    try {
+      return await new Promise<string>((resolve, reject) => {
+        // Configure request options with SSL certificate ignore
+        const requestOptions = {
+          timeout: 10000,
+          // Ignore SSL certificate errors for sites with self-signed certificates
+          rejectUnauthorized: false
+        };
+        
+        const request = client.get(imageUrl, requestOptions, (response) => {
+          if (response.statusCode !== 200) {
+            console.warn(`Failed to download image from ${imageUrl}: HTTP ${response.statusCode}. Returning empty string.`);
+            // Return empty string instead of original URL to avoid broken external links
+            resolve('');
+            return;
+          }
 
-        const fileStream = fs.createWriteStream(filepath);
-        response.pipe(fileStream);
+          const fileStream = fs.createWriteStream(filepath);
+          response.pipe(fileStream);
 
-        fileStream.on('finish', () => {
-          fileStream.close();
-          console.log(`Successfully downloaded image to ${filepath}`);
-          resolve(`/uploads/${filename}`);
+          fileStream.on('finish', () => {
+            fileStream.close();
+            console.log(`Successfully downloaded image to ${filepath}`);
+            resolve(`/uploads/${filename}`);
+          });
+
+          fileStream.on('error', (err) => {
+            console.error(`Error writing file ${filepath}:`, err);
+            fs.unlink(filepath, () => {}); // Delete partial file
+            // Return empty string instead of rejecting
+            resolve('');
+          });
         });
 
-        fileStream.on('error', (err) => {
-          console.error(`Error writing file ${filepath}:`, err);
-          fs.unlink(filepath, () => {}); // Delete partial file
-          reject(err);
+        request.on('error', (err) => {
+          console.error(`Error downloading from ${imageUrl}:`, err);
+          // Return empty string instead of rejecting
+          resolve('');
+        });
+
+        request.setTimeout(10000, () => {
+          request.destroy();
+          // Return empty string instead of rejecting
+          resolve('');
         });
       });
-
-      request.on('error', (err) => {
-        console.error(`Error downloading from ${imageUrl}:`, err);
-        reject(err);
-      });
-
-      request.setTimeout(10000, () => {
-        request.destroy();
-        reject(new Error('Download timeout'));
-      });
-    });
+    } catch (promiseError) {
+      console.error('Promise error in downloadAndSaveImage:', promiseError);
+      // Return empty string instead of original URL
+      return '';
+    }
   } catch (error) {
     console.error('Error in downloadAndSaveImage:', error);
-    // If download fails, return original URL
-    return imageUrl;
+    // Return empty string instead of original URL to avoid broken external links
+    return '';
   }
 }
 
 export async function createRecipe(req: Request, res: Response) {
   try {
-    const { title, description, ingredients, instructions, imageUrl, tags, cookTime, difficulty, timeReasoning, difficultyReasoning } = req.body;
+    const { title, description, ingredients, instructions, imageUrl, tags, cookTime, difficulty, timeReasoning, difficultyReasoning, sourceUrl } = req.body;
     
     // Debug: Log the entire OIDC object
     console.log('OIDC object:', JSON.stringify((req as any).oidc, null, 2));
@@ -194,6 +218,7 @@ export async function createRecipe(req: Request, res: Response) {
         title,
         description,
         imageUrl: localImageUrl,
+        sourceUrl: sourceUrl || null, // Save original URL if imported
         userId: dbUser.id,
         estimatedTime: cookTime, // Map cookTime to estimatedTime for database compatibility
         difficulty,

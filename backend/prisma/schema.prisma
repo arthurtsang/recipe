@@ -30,6 +30,7 @@ model Recipe {
   title            String
   description      String?
   imageUrl         String?
+  sourceUrl        String?         // Original URL if imported from external site
   estimatedTime    String?         // e.g., "15-30 min", "45-60 min"
   difficulty       String?         // "Easy", "Medium", "Advanced"
   timeReasoning    String?         // LLM reasoning for estimated time

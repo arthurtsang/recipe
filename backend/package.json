@@ -9,7 +9,8 @@
     "dev:ui": "chokidar \"../web/src/**/*\" -c \"cd ../web && npm run build\"",
     "build:backend": "tsc -b",
     "build:ui": "cd ../web && npm install && npm run build",
-    "build": "npm run build:backend && npm run build:ui"
+    "build": "npm run build:backend && npm run build:ui",
+    "redownload-images": "ts-node scripts/redownload-images.ts"
   },
   "keywords": [],
   "author": "",

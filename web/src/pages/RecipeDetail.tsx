@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Paper, Typography, Box, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemButton, ListItemText, Checkbox, FormControlLabel, Rating, Alert, Slide } from '@mui/material';
+import { Paper, Typography, Box, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemButton, ListItemText, Checkbox, FormControlLabel, Rating, Alert, Slide, Link } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 
 interface User {
@@ -26,6 +26,7 @@ interface Recipe {
   title: string;
   description?: string;
   imageUrl?: string;
+  sourceUrl?: string;
   estimatedTime?: string;
   difficulty?: string;
   user: { id: string; name?: string; email: string };
@@ -249,9 +250,22 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   if (!recipe) return <Typography>{t('recipeNotFound')}</Typography>;
 
   // Fix image URL if it's a relative path
-  let imageUrl = editFields?.imageUrl || recipe?.imageUrl;
+  // Get imageUrl from editFields (version), recipe, or selected version
+  let imageUrl = editFields?.imageUrl || recipe?.imageUrl || selectedVersion?.imageUrl;
+  
+  // Handle relative paths
   if (imageUrl && imageUrl.startsWith('/uploads/')) {
     imageUrl = `${window.location.origin}${imageUrl}`;
+  }
+  
+  // Fix localhost URLs from backend (replace with current origin)
+  if (imageUrl && imageUrl.includes('localhost:8081')) {
+    imageUrl = imageUrl.replace(/https?:\/\/localhost:8081/, window.location.origin);
+  }
+  
+  // Handle external images with proxy endpoint (for CORS)
+  if (imageUrl && imageUrl.startsWith('http') && !imageUrl.startsWith(window.location.origin)) {
+    imageUrl = `/api/recipes/proxy-image?url=${encodeURIComponent(imageUrl)}`;
   }
 
   return (
@@ -289,33 +303,20 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
         )}
       </Box>
       {/* Image preview */}
-      {imageUrl && <Box mb={2}><img src={imageUrl} alt={editFields?.title || recipe?.title || ''} style={{ maxWidth: 400, width: '100%' }} /></Box>}
-      {/* Image upload for owner, now below the image */}
-      {isOwner && (
+      {imageUrl && (
         <Box mb={2}>
-          <Button variant="outlined" component="label">
-            {t('uploadImage', 'Upload Image')}
-            <input
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const formData = new FormData();
-                formData.append('image', file);
-                const res = await fetch('/api/recipes/upload', {
-                  method: 'POST',
-                  body: formData,
-                  credentials: 'include',
-                });
-                const data = await res.json();
-                if (data.url) {
-                  setEditFields(prev => prev ? { ...prev, imageUrl: data.url } : null);
-                }
-              }}
-            />
-          </Button>
+          <img 
+            src={imageUrl} 
+            alt={editFields?.title || recipe?.title || ''} 
+            style={{ maxWidth: 400, width: '100%', objectFit: 'contain' }} 
+            onError={(e) => {
+              console.warn('Failed to load image:', imageUrl);
+              e.currentTarget.style.display = 'none';
+            }}
+            onLoad={() => {
+              console.log('Image loaded successfully:', imageUrl);
+            }}
+          />
         </Box>
       )}
       {/* Star Rating UI */}
@@ -426,7 +427,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
         )}
       </Box>
       <Typography variant="h6" mt={2}>{t('instructions')}</Typography>
-      <Box component="pre" sx={{ background: '#f5f5f5', p: 2, borderRadius: 1, overflowX: 'auto' }}>
+      <Box sx={{ background: '#f5f5f5', p: 2, borderRadius: 1 }}>
         {isOwner && isEditing ? (
           <TextField
             value={editFields?.instructions || ''}
@@ -442,7 +443,17 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
               .split('\n')
               .filter(line => line.trim())
               .map((instruction, index) => (
-                <Typography key={index} component="li" sx={{ mb: 1, fontSize: 16 }}>
+                <Typography 
+                  key={index} 
+                  component="li" 
+                  sx={{ 
+                    mb: 1, 
+                    fontSize: 16,
+                    whiteSpace: 'normal',
+                    wordWrap: 'break-word',
+                    overflowWrap: 'break-word'
+                  }}
+                >
                   {instruction.trim()}
                 </Typography>
               ))}
@@ -451,6 +462,21 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       </Box>
       <Box sx={{ fontSize: '0.9em', color: 'text.secondary', mt: 2 }}>
         {t('by')}: {recipe.user?.name || recipe.user?.email}
+        {recipe.sourceUrl && (
+          <Box sx={{ mt: 1 }}>
+            <Typography variant="body2" component="span" color="text.secondary">
+              Source: {' '}
+            </Typography>
+            <Link 
+              href={recipe.sourceUrl} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              sx={{ color: 'primary.main', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
+            >
+              {recipe.sourceUrl}
+            </Link>
+          </Box>
+        )}
       </Box>
       {/* Versions List */}
       {versions.length > 0 && (

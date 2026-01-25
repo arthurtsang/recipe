@@ -39,7 +39,13 @@ const RecipeForm: React.FC<{ user: User | null }> = ({ user }) => {
           setDescription(data.description || '');
           setIngredients(data.versions?.[0]?.ingredients || '');
           setInstructions(data.versions?.[0]?.instructions || '');
-          setImageUrl(data.imageUrl || '');
+          // Use recipe imageUrl, or fallback to version imageUrl
+          const imgUrl = data.imageUrl || data.versions?.[0]?.imageUrl || '';
+          setImageUrl(imgUrl);
+          // Set imagePreview to show the existing image
+          if (imgUrl) {
+            setImagePreview(null); // Clear any previous preview
+          }
         })
         .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
         .finally(() => setLoading(false));
@@ -154,11 +160,30 @@ const RecipeForm: React.FC<{ user: User | null }> = ({ user }) => {
           {(imagePreview || imageUrl) && (
             <Box mt={2}>
               <img 
-                src={imagePreview || imageUrl} 
+                src={
+                  imagePreview 
+                    ? imagePreview 
+                    : (() => {
+                        // Fix localhost URLs from backend
+                        let url = imageUrl;
+                        if (url && url.includes('localhost:8081')) {
+                          url = url.replace(/https?:\/\/localhost:8081/, window.location.origin);
+                        }
+                        // Handle external images with proxy endpoint
+                        if (url && url.startsWith('http') && !url.startsWith(window.location.origin)) {
+                          return `/api/recipes/proxy-image?url=${encodeURIComponent(url)}`;
+                        }
+                        return url;
+                      })()
+                }
                 alt="Preview" 
-                style={{ maxWidth: 200, maxHeight: 200, objectFit: 'contain' }} 
+                style={{ maxWidth: 200, maxHeight: 200, objectFit: 'contain', display: 'block' }} 
                 onError={(e) => {
+                  console.warn('Failed to load image:', imagePreview || imageUrl);
                   e.currentTarget.style.display = 'none';
+                }}
+                onLoad={() => {
+                  console.log('Image loaded successfully:', imagePreview || imageUrl);
                 }}
               />
             </Box>

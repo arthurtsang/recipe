@@ -87,6 +87,7 @@ const ImportHistory: React.FC<ImportHistoryProps> = ({ open, onClose }) => {
           ingredients: job.result.ingredients,
           instructions: job.result.instructions,
           imageUrl: job.result.imageUrl,
+          sourceUrl: job.url, // Use the import job URL as source
           estimatedTime: job.result.estimatedTime,
           difficulty: job.result.difficulty,
           timeReasoning: job.result.timeReasoning,
