@@ -42,11 +42,9 @@ echo -e "${GREEN}Backup directory: $BACKUP_PATH${NC}"
 # Step 1: Clean up orphaned images
 echo -e "${YELLOW}Step 1: Cleaning up orphaned images...${NC}"
 
-# Create a temporary script to find orphaned images inside the container
+# Create a temporary script to find orphaned images inside the container (single UNION query; \copy has no APPEND)
 docker exec metro-bistro-postgres bash -c 'cat > /tmp/cleanup_images.sql << "EOF"
--- Find all image URLs in the database
-\copy (SELECT DISTINCT "imageUrl" FROM "Recipe" WHERE "imageUrl" IS NOT NULL AND "imageUrl" != '\''\'\'') TO '\''/tmp/db_images.txt'\'' WITH CSV;
-\copy (SELECT DISTINCT "imageUrl" FROM "RecipeVersion" WHERE "imageUrl" IS NOT NULL AND "imageUrl" != '\''\'\'') TO '\''/tmp/db_images.txt'\'' WITH CSV APPEND;
+\copy (SELECT DISTINCT "imageUrl" FROM "Recipe" WHERE "imageUrl" IS NOT NULL AND "imageUrl" != '\''\'\'' UNION SELECT DISTINCT "imageUrl" FROM "RecipeVersion" WHERE "imageUrl" IS NOT NULL AND "imageUrl" != '\''\'\'') TO '\''/tmp/db_images.txt'\'' WITH CSV;
 EOF'
 
 # Run the SQL to get database images
@@ -55,19 +53,20 @@ PGPASSWORD=metro_password $PSQL -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME 
 # Copy the results file from container to host
 docker cp metro-bistro-postgres:/tmp/db_images.txt /tmp/db_images.txt
 
-# Find orphaned files (files in uploads that aren't in database)
-echo -e "${YELLOW}Finding orphaned images...${NC}"
-cd "$UPLOADS_DIR"
-find . -type f \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o -name "*.gif" -o -name "*.webp" \) | while read -r file; do
-    # Remove ./ prefix
-    file_relative=${file#./}
-    
-    # Check if this file is referenced in the database
-    if ! grep -q "/uploads/$file_relative" /tmp/db_images.txt; then
-        echo -e "${RED}Removing orphaned image: $file_relative${NC}"
-        rm -f "$file"
-    fi
-done
+# Find orphaned files (files in uploads that aren't in database) — only when uploads dir exists
+if [ -d "$UPLOADS_DIR" ]; then
+    echo -e "${YELLOW}Finding orphaned images...${NC}"
+    cd "$UPLOADS_DIR"
+    find . -type f \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o -name "*.gif" -o -name "*.webp" \) | while read -r file; do
+        # Remove ./ prefix
+        file_relative=${file#./}
+        if ! grep -q "/uploads/$file_relative" /tmp/db_images.txt; then
+            echo -e "${RED}Removing orphaned image: $file_relative${NC}"
+            rm -f "$file"
+        fi
+    done
+    cd - > /dev/null
+fi
 
 # Clean up temporary files
 rm -f /tmp/db_images.txt
@@ -94,9 +93,10 @@ UPLOADS_BACKUP_DIR="$BACKUP_PATH/uploads"
 mkdir -p "$UPLOADS_BACKUP_DIR"
 
 if [ -d "$UPLOADS_DIR" ]; then
-    cp -r "$UPLOADS_DIR"/* "$UPLOADS_BACKUP_DIR/"
+    # Use /. so empty dir copies without "cannot stat .../*"
+    cp -r "$UPLOADS_DIR"/. "$UPLOADS_BACKUP_DIR/"
     echo -e "${GREEN}Uploads backup completed: $UPLOADS_BACKUP_DIR${NC}"
-    echo "Uploads size: $(du -sh "$UPLOADS_BACKUP_DIR" | cut -f1)"
+    echo "Uploads size: $(du -sh "$UPLOADS_BACKUP_DIR" 2>/dev/null | cut -f1 || echo "0")"
 else
     echo -e "${YELLOW}Uploads directory not found, skipping...${NC}"
 fi

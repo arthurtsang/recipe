@@ -1,6 +1,7 @@
 [Unit]
 Description=Metro Bistro Backup Service
-After=network.target
+After=network.target metro-bistro-postgres.service metro-bistro-backend.service
+Wants=metro-bistro-postgres.service
 
 [Service]
 Type=oneshot
