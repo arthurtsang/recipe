@@ -274,10 +274,27 @@ export async function updateRecipe(req: Request, res: Response) {
       return res.status(403).json({ error: 'Not authorized to update this recipe' });
     }
 
+    // Treat empty string as no image
+    const rawImageUrl = (typeof imageUrl === 'string' && !imageUrl.trim()) ? null : (imageUrl ?? null);
     // Download external image if provided and different from current
-    const localImageUrl = imageUrl && imageUrl !== existingRecipe.imageUrl
-      ? await downloadAndSaveImage(imageUrl)
-      : imageUrl;
+    const localImageUrl = rawImageUrl && rawImageUrl !== existingRecipe.imageUrl
+      ? await downloadAndSaveImage(rawImageUrl)
+      : rawImageUrl;
+
+    // When updating in place, delete old local image file if we're replacing or removing the image
+    if (createNewVersion === false) {
+      const oldImageUrl = existingRecipe.imageUrl ?? existingRecipe.currentVersion?.imageUrl ?? null;
+      if (oldImageUrl && oldImageUrl.startsWith('/uploads/') && localImageUrl !== oldImageUrl) {
+        const oldPath = path.join(uploadDir, path.basename(oldImageUrl));
+        try {
+          if (fs.existsSync(oldPath)) {
+            fs.unlinkSync(oldPath);
+          }
+        } catch (e) {
+          console.warn('Could not delete old image file:', oldPath, e);
+        }
+      }
+    }
 
     if (createNewVersion === true) {
       // Create a new RecipeVersion and set it as current (so "Save as new version" shows up in version list)
@@ -312,7 +329,7 @@ export async function updateRecipe(req: Request, res: Response) {
         data: {
           title,
           description,
-          imageUrl: localImageUrl,
+          imageUrl: localImageUrl ?? null,
           estimatedTime: cookTime,
           difficulty,
         },
@@ -325,7 +342,7 @@ export async function updateRecipe(req: Request, res: Response) {
             description: description || '',
             ingredients: ingredients || '',
             instructions: instructions || '',
-            imageUrl: localImageUrl,
+            imageUrl: localImageUrl ?? null,
           },
         });
       }
@@ -358,27 +375,43 @@ export async function updateRecipe(req: Request, res: Response) {
   }
 }
 
+function deleteLocalImageIfExists(imageUrl: string | null | undefined): void {
+  if (!imageUrl || !imageUrl.startsWith('/uploads/')) return;
+  const imgPath = path.join(uploadDir, path.basename(imageUrl));
+  try {
+    if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
+  } catch (e) {
+    console.warn('Could not delete image file:', imgPath, e);
+  }
+}
+
 export async function deleteRecipe(req: Request, res: Response) {
   try {
-    // Fetch the recipe and its versions to get image URLs
+    if (!req.oidc?.user?.email) return res.status(401).json({ error: 'Not authenticated' });
+    const dbUser = await prisma.user.findUnique({ where: { email: req.oidc.user.email.toLowerCase() } });
+    if (!dbUser) return res.status(401).json({ error: 'User not found' });
+
     const recipe = await prisma.recipe.findUnique({
       where: { id: req.params.id },
       include: { versions: true },
     });
-    if (recipe) {
-      // Delete main recipe image if local
-      if (recipe.imageUrl && recipe.imageUrl.startsWith('/uploads/')) {
-        const imgPath = path.join(uploadDir, path.basename(recipe.imageUrl));
-        if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
-      }
-      // Delete all version images if local
-      for (const v of recipe.versions) {
-        if (v.imageUrl && v.imageUrl.startsWith('/uploads/')) {
-          const imgPath = path.join(uploadDir, path.basename(v.imageUrl));
-          if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
+    if (!recipe) return res.status(404).json({ error: 'Recipe not found' });
+    if (recipe.userId !== dbUser.id) return res.status(403).json({ error: 'Not authorized to delete this recipe' });
+
+    // Delete main recipe image if local
+    deleteLocalImageIfExists(recipe.imageUrl);
+    // Delete all version images if local (dedupe by path in case recipe.imageUrl === version.imageUrl)
+    const deletedPaths = new Set<string>();
+    for (const v of recipe.versions) {
+      if (v.imageUrl && v.imageUrl.startsWith('/uploads/')) {
+        const imgPath = path.join(uploadDir, path.basename(v.imageUrl));
+        if (!deletedPaths.has(imgPath)) {
+          deletedPaths.add(imgPath);
+          deleteLocalImageIfExists(v.imageUrl);
         }
       }
     }
+
     await recipeService.deleteRecipe(req.params.id);
     res.status(204).send();
   } catch (err) {
@@ -390,19 +423,46 @@ export async function deleteRecipe(req: Request, res: Response) {
 export async function deleteRecipeVersion(req: Request, res: Response) {
   try {
     const { id, versionId } = req.params;
-    // Fetch the version to get image URL
+    if (!req.oidc?.user?.email) return res.status(401).json({ error: 'Not authenticated' });
+    const dbUser = await prisma.user.findUnique({ where: { email: req.oidc.user.email.toLowerCase() } });
+    if (!dbUser) return res.status(401).json({ error: 'User not found' });
+
+    const recipe = await prisma.recipe.findUnique({ where: { id }, include: { versions: true } });
+    if (!recipe) return res.status(404).json({ error: 'Recipe not found' });
+    if (recipe.userId !== dbUser.id) return res.status(403).json({ error: 'Not authorized to delete this version' });
+
     const version = await prisma.recipeVersion.findUnique({ where: { id: versionId } });
-    if (version && version.imageUrl && version.imageUrl.startsWith('/uploads/')) {
-      const imgPath = path.join(uploadDir, path.basename(version.imageUrl));
-      if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
-    }
+    if (!version) return res.status(404).json({ error: 'Version not found' });
+    if (version.recipeId !== id) return res.status(400).json({ error: 'Version does not belong to this recipe' });
+
+    // Delete the version's local image file
+    deleteLocalImageIfExists(version.imageUrl);
+
     await prisma.recipeVersion.delete({ where: { id: versionId } });
-    // Return the updated recipe with all versions (creation order)
-    const recipe = await prisma.recipe.findUnique({
+
+    // If we deleted the current version, point recipe to another version or clear
+    if (recipe.currentVersionId === versionId) {
+      const remaining = recipe.versions
+        .filter((v) => v.id !== versionId)
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      const nextVersion = remaining.length > 0 ? remaining[remaining.length - 1] : null;
+      await prisma.recipe.update({
+        where: { id },
+        data: {
+          currentVersionId: nextVersion?.id ?? null,
+          title: nextVersion?.title ?? recipe.title,
+          description: nextVersion?.description ?? recipe.description,
+          imageUrl: nextVersion?.imageUrl ?? null,
+        },
+      });
+    }
+
+    const updated = await prisma.recipe.findUnique({
       where: { id },
-      include: { versions: { orderBy: { createdAt: 'asc' } } },
+      include: { versions: { orderBy: { createdAt: 'asc' } }, user: true },
     });
-    res.json(recipe);
+    const payload = updated ? { ...updated, versions: updated.versions ?? [] } : null;
+    res.json(payload);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to delete version' });

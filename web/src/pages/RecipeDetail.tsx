@@ -55,6 +55,8 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [originalFields, setOriginalFields] = useState<Version | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -76,7 +78,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
         setSelectedVersionIdx(idx);
         if (versions.length > 0) {
           const v = versions[idx];
-          setEditFields({ ...v, title: data.title, description: data.description, imageUrl: data.imageUrl });
+          setEditFields({ ...v, title: data.title, description: data.description, imageUrl: v.imageUrl ?? data.imageUrl ?? '' });
         }
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
@@ -104,17 +106,67 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   });
   const selectedVersion = versions[selectedVersionIdx] || {};
 
+  // Render markdown with visible blank-line spacing (runs of 2+ newlines become spacer boxes)
+  const renderMarkdownWithBlankLines = (content: string) => {
+    const str = String(content ?? '');
+    const parts = str.split(/(\n{2,})/);
+    const mdComponents = { p: ({ children }: { children?: React.ReactNode }) => <Typography component="p" sx={{ fontSize: 16, mb: 0.5 }}>{children}</Typography>, li: ({ children }: { children?: React.ReactNode }) => <Typography component="li" sx={{ fontSize: 16, mb: 0.25 }}>{children}</Typography>, ul: ({ children }: { children?: React.ReactNode }) => <Box component="ul" sx={{ m: 0, pl: 2 }}>{children}</Box>, ol: ({ children }: { children?: React.ReactNode }) => <Box component="ol" sx={{ m: 0, pl: 2 }}>{children}</Box> };
+    return (
+      <>
+        {parts.map((part, i) =>
+          /^\n+$/.test(part) ? (
+            <Box key={i} sx={{ minHeight: '1em' }} aria-hidden />
+          ) : (
+            <ReactMarkdown key={i} remarkPlugins={[remarkBreaks]} components={mdComponents}>
+              {part.replace(/\n/g, '  \n')}
+            </ReactMarkdown>
+          )
+        )}
+      </>
+    );
+  };
+
   // Handle version selection
   const handleSelectVersion = (idx: number) => {
     setSelectedVersionIdx(idx);
     if (!recipe) return;
-    setEditFields({ ...versions[idx], title: recipe.title, description: recipe.description, imageUrl: recipe.imageUrl });
+    const ver = versions[idx];
+    setEditFields({ ...ver, title: recipe.title, description: recipe.description, imageUrl: ver?.imageUrl ?? recipe.imageUrl ?? '' });
   };
 
   // Edit button handler to enter edit mode
   const handleEdit = () => {
     setIsEditing(true);
     setOriginalFields(editFields);
+    setImagePreview(null);
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImagePreview(URL.createObjectURL(file));
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const res = await fetch('/api/recipes/upload', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to upload image');
+      handleFieldChange('imageUrl', data.url);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteImage = () => {
+    handleFieldChange('imageUrl', '');
+    setImagePreview(null);
   };
 
   // Open save dialog and set default version name
@@ -191,7 +243,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           ...(v || {}),
           title: data.title ?? '',
           description: data.description ?? '',
-          imageUrl: data.imageUrl,
+          imageUrl: v?.imageUrl ?? data.imageUrl ?? '',
         };
       } else {
         // Handle case where there are no versions - use the current editFields
@@ -200,7 +252,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           ...editFields,
           title: data.title, 
           description: data.description, 
-          imageUrl: data.imageUrl
+          imageUrl: data.imageUrl ?? ''
         };
       }
       
@@ -216,6 +268,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   // Cancel handler
   const handleCancel = () => {
     if (originalFields) setEditFields(originalFields);
+    setImagePreview(null);
     setIsEditing(false);
     setHasUnsavedChanges(false);
   };
@@ -257,7 +310,8 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       const data = await recipeRes.json();
       setRecipe(data);
       setSelectedVersionIdx(0);
-      setEditFields(data.versions && data.versions[0] ? { ...data.versions[0], title: data.title, description: data.description, imageUrl: data.imageUrl } : null);
+      const firstVer = data.versions?.[0];
+      setEditFields(firstVer ? { ...firstVer, title: data.title, description: data.description, imageUrl: firstVer.imageUrl ?? data.imageUrl ?? '' } : null);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -270,14 +324,23 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   if (!recipe) return <Typography>{t('recipeNotFound')}</Typography>;
 
   // Image URL: /uploads/ -> /api/uploads/ (backend serves there), external -> proxy
-  let imageUrl = editFields?.imageUrl || recipe?.imageUrl || selectedVersion?.imageUrl;
-  if (imageUrl && imageUrl.startsWith('/uploads/')) {
-    imageUrl = `${window.location.origin}/api/uploads/${imageUrl.replace(/^\/uploads\/?/, '')}`;
-  } else if (imageUrl && imageUrl.includes('localhost:8081')) {
-    imageUrl = imageUrl.replace(/https?:\/\/localhost:8081/, window.location.origin);
-  } else if (imageUrl && imageUrl.startsWith('http') && !imageUrl.startsWith(window.location.origin)) {
-    imageUrl = `/api/recipes/proxy-image?url=${encodeURIComponent(imageUrl)}`;
-  }
+  const resolveImageUrl = (raw: string | undefined): string | null => {
+    if (!raw || (typeof raw === 'string' && !raw.trim())) return null;
+    let u = raw;
+    if (u.startsWith('/uploads/')) {
+      u = `${window.location.origin}/api/uploads/${u.replace(/^\/uploads\/?/, '')}`;
+    } else if (u.includes('localhost:8081')) {
+      u = u.replace(/https?:\/\/localhost:8081/, window.location.origin);
+    } else if (u.startsWith('http') && !u.startsWith(window.location.origin)) {
+      u = `/api/recipes/proxy-image?url=${encodeURIComponent(u)}`;
+    }
+    return u;
+  };
+  // When editing: show preview or current edit value (empty = no image). When not editing: show selected version's image only (so switching to a version with no image hides the image).
+  const displayImageUrl = isOwner && isEditing
+    ? (imagePreview ?? resolveImageUrl(editFields?.imageUrl ?? '') ?? null)
+    : resolveImageUrl(editFields?.imageUrl ?? selectedVersion?.imageUrl ?? '');
+  const hasImageInEdit = !!(editFields?.imageUrl && String(editFields.imageUrl).trim());
 
   return (
     <Paper sx={{ p: 4, maxWidth: 900, mx: 'auto', width: '100%' }}>
@@ -313,17 +376,53 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           </Typography>
         )}
       </Box>
-      {/* Image preview */}
-      {imageUrl && (
+      {/* Image: view or edit (upload / URL / delete) */}
+      {(displayImageUrl || (isOwner && isEditing)) && (
         <Box mb={2}>
-          <img 
-            src={imageUrl} 
-            alt={editFields?.title || recipe?.title || ''} 
-            style={{ maxWidth: 400, width: '100%', objectFit: 'contain' }} 
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
+          {isOwner && isEditing ? (
+            <>
+              <Typography variant="subtitle2" gutterBottom>Image (upload file or enter URL)</Typography>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 1, flexWrap: 'wrap' }}>
+                <Button variant="outlined" component="label" size="small">
+                  Upload Image
+                  <input type="file" accept="image/*" hidden onChange={handleImageUpload} />
+                </Button>
+                {(displayImageUrl || hasImageInEdit) && (
+                  <Button variant="outlined" color="error" size="small" onClick={handleDeleteImage}>
+                    Delete image
+                  </Button>
+                )}
+              </Box>
+              <TextField
+                fullWidth
+                size="small"
+                label="Image URL"
+                value={editFields?.imageUrl ?? ''}
+                onChange={e => handleFieldChange('imageUrl', e.target.value)}
+                placeholder="https://example.com/image.jpg"
+                helperText="Enter a direct link to an image"
+                sx={{ mb: 1 }}
+              />
+              {uploading && <Typography sx={{ mt: 1 }} component="span">Uploading...</Typography>}
+              {displayImageUrl && (
+                <img
+                  src={displayImageUrl}
+                  alt={editFields?.title || recipe?.title || ''}
+                  style={{ maxWidth: 400, width: '100%', objectFit: 'contain' }}
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              )}
+            </>
+          ) : (
+            displayImageUrl && (
+              <img
+                src={displayImageUrl}
+                alt={editFields?.title || recipe?.title || ''}
+                style={{ maxWidth: 400, width: '100%', objectFit: 'contain' }}
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+            )
+          )}
         </Box>
       )}
       {/* Star Rating UI */}
@@ -432,9 +531,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
             InputProps={{ disableUnderline: true, style: { fontFamily: 'inherit', fontSize: 16 } }}
           />
         ) : (
-          <ReactMarkdown remarkPlugins={[remarkBreaks]} components={{ p: ({ children }) => <Typography component="p" sx={{ fontSize: 16, mb: 0.5 }}>{children}</Typography>, li: ({ children }) => <Typography component="li" sx={{ fontSize: 16, mb: 0.25 }}>{children}</Typography>, ul: ({ children }) => <Box component="ul" sx={{ m: 0, pl: 2 }}>{children}</Box>, ol: ({ children }) => <Box component="ol" sx={{ m: 0, pl: 2 }}>{children}</Box> }}>
-            {String(editFields?.ingredients ?? selectedVersion?.ingredients ?? '')}
-          </ReactMarkdown>
+          renderMarkdownWithBlankLines(editFields?.ingredients ?? selectedVersion?.ingredients ?? '')
         )}
       </Box>
       <Typography variant="h6" mt={2}>{t('instructions')}</Typography>
@@ -451,9 +548,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
             InputProps={{ disableUnderline: true, style: { fontFamily: 'inherit', fontSize: 16 } }}
           />
         ) : (
-          <ReactMarkdown remarkPlugins={[remarkBreaks]} components={{ p: ({ children }) => <Typography component="p" sx={{ fontSize: 16, mb: 0.5 }}>{children}</Typography>, li: ({ children }) => <Typography component="li" sx={{ fontSize: 16, mb: 0.25 }}>{children}</Typography>, ul: ({ children }) => <Box component="ul" sx={{ m: 0, pl: 2 }}>{children}</Box>, ol: ({ children }) => <Box component="ol" sx={{ m: 0, pl: 2 }}>{children}</Box> }}>
-            {String(editFields?.instructions ?? selectedVersion?.instructions ?? '')}
-          </ReactMarkdown>
+          renderMarkdownWithBlankLines(editFields?.instructions ?? selectedVersion?.instructions ?? '')
         )}
       </Box>
       <Box sx={{ fontSize: '0.9em', color: 'text.secondary', mt: 2 }}>
