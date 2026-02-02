@@ -1,6 +1,6 @@
 import express from 'express';
 import { startImport, getImportStatus, getUserImports, deleteImportJob, updateImportJobRecipe, saveImportedRecipe } from '../controllers/importJobController';
-import { requiresEnabledUser } from '../index';
+import { requiresEnabledUser } from '../middleware/auth';
 
 const router = express.Router();
 

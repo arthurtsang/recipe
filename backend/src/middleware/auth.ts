@@ -1,6 +1,8 @@
-import { prisma } from '../index';
+import { PrismaClient } from '@prisma/client';
 
-// Middleware to check if user is enabled
+const prisma = new PrismaClient();
+
+// Middleware to check if user is enabled (avoids circular dependency with index)
 export const requiresEnabledUser = () => {
   return (req: any, res: any, next: any) => {
     if (!req.oidc?.user?.email) {

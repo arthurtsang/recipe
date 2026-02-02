@@ -56,6 +56,7 @@ app.use(auth({
     login: '/auth/google',
     callback: '/auth/google/callback',
     logout: '/logout',
+    postLogoutRedirect: '/',
   },
 
   afterCallback: async (req, res, session) => {
@@ -69,7 +70,7 @@ app.use(auth({
     const email = user.email.toLowerCase();
     const isAdmin = email === process.env.ADMIN_EMAIL?.toLowerCase();
     
-    // Find or create user in DB
+    // Find or create user in DB; new users default to disabled unless admin
     let dbUser = await prisma.user.findUnique({ where: { email } });
     if (!dbUser) {
       dbUser = await prisma.user.create({
@@ -79,7 +80,7 @@ app.use(auth({
           picture: user.picture,
           oidcProvider: 'google',
           oidcSub: user.sub,
-          isEnabled: isAdmin, // Admin is enabled by default, others need approval
+          isEnabled: isAdmin, // Admin only; everyone else stays disabled until admin enables
         },
       });
       console.log(`Created new user: ${email}, enabled: ${isAdmin}`);
@@ -95,51 +96,8 @@ app.use(auth({
   },
 }));
 
-// Middleware to check if user is enabled
-export const requiresEnabledUser = () => {
-  return (req: any, res: any, next: any) => {
-    if (!req.oidc?.user?.email) {
-      return res.status(401).json({ error: 'Not authenticated' });
-    }
-    
-    const isAdmin = req.oidc.user.email.toLowerCase() === process.env.ADMIN_EMAIL?.toLowerCase();
-    if (isAdmin) {
-      return next(); // Admin always has access
-    }
-    
-    // Check if user is enabled in database
-    prisma.user.findUnique({ 
-      where: { email: req.oidc.user.email.toLowerCase() } 
-    }).then(user => {
-      if (!user || !user.isEnabled) {
-        return res.status(403).json({ 
-          error: 'Account pending approval', 
-          message: 'Your account is waiting for admin approval. Please contact the administrator.' 
-        });
-      }
-      next();
-    }).catch(err => {
-      console.error('Error checking user status:', err);
-      res.status(500).json({ error: 'Internal server error' });
-    });
-  };
-};
-
-// Middleware to check if user is admin
-const requiresAdmin = () => {
-  return (req: any, res: any, next: any) => {
-    if (!req.oidc?.user?.email) {
-      return res.status(401).json({ error: 'Not authenticated' });
-    }
-    
-    const isAdmin = req.oidc.user.email.toLowerCase() === process.env.ADMIN_EMAIL?.toLowerCase();
-    if (!isAdmin) {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-    
-    next();
-  };
-};
+import { requiresEnabledUser, requiresAdmin } from './middleware/auth';
+export { requiresEnabledUser } from './middleware/auth';
 
 // Resolve Bearer token so /api/me and other routes accept API-token auth (e.g. save-mabels-imports.ts)
 app.use((req: any, res, next) => {
@@ -392,8 +350,8 @@ app.use('/api', (req, res) => {
   });
 });
 
-// For any route not handled by your API, serve index.html (for React Router)
-app.get(/^\/(?!api|uploads|auth|static).*/, (req, res) => {
+// For any route not handled by your API, serve index.html (for React Router); exclude /logout so OIDC handles it
+app.get(/^\/(?!api|uploads|auth|static|logout).*/, (req, res) => {
   res.sendFile(path.join(__dirname, '../../web/dist', 'index.html'));
 });
 

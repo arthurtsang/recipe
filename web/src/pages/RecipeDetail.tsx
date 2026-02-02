@@ -113,8 +113,9 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     const parts = str.split(/(\n{2,})/);
     const mdComponents = {
       p: ({ children }: { children?: React.ReactNode }) => <Typography component="p" sx={{ fontSize: 16, mb: 0.5 }}>{children}</Typography>,
-      li: ({ children, node, ...props }: { children?: React.ReactNode; node?: { checked?: boolean } }) => {
-        const checked = node?.checked;
+      li: (props: { children?: React.ReactNode; node?: unknown }) => {
+        const { children, node } = props;
+        const checked = (node as { checked?: boolean } | undefined)?.checked;
         if (typeof checked === 'boolean') {
           return (
             <Box component="li" sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, fontSize: 16, mb: 0.25, listStyle: 'none' }}>
@@ -123,7 +124,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
             </Box>
           );
         }
-        return <Typography component="li" sx={{ fontSize: 16, mb: 0.25 }} {...props}>{children}</Typography>;
+        return <Typography component="li" sx={{ fontSize: 16, mb: 0.25 }}>{children}</Typography>;
       },
       ul: ({ children }: { children?: React.ReactNode }) => <Box component="ul" sx={{ m: 0, pl: 2 }}>{children}</Box>,
       ol: ({ children }: { children?: React.ReactNode }) => <Box component="ol" sx={{ m: 0, pl: 2 }}>{children}</Box>,
