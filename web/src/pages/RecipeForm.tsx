@@ -128,14 +128,18 @@ const RecipeForm: React.FC<{ user: User | null }> = ({ user }) => {
           value={ingredients}
           onChange={e => setIngredients(e.target.value)}
           multiline
+          minRows={4}
           required
+          helperText="Markdown supported (**, -, 1. …). Single newlines = line breaks."
         />
         <TextField
           label="Instructions"
           value={instructions}
           onChange={e => setInstructions(e.target.value)}
           multiline
+          minRows={6}
           required
+          helperText="Markdown supported (**, ##, 1. …). Single newlines = line breaks."
         />
         <Box>
           <Typography variant="subtitle2" gutterBottom>
