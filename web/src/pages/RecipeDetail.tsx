@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Paper, Typography, Box, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemButton, ListItemText, Checkbox, FormControlLabel, Rating, Alert, Slide, Link } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 
 interface User {
   id: string;
@@ -151,27 +153,29 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       });
       if (!res.ok) throw new Error('Failed to save');
       const data = await res.json();
-      setRecipe(data);
-      
+      const versions = Array.isArray(data.versions) ? data.versions : [];
+      setRecipe({ ...data, versions });
+
       // Find the new/updated version index
       let newIdx = 0;
-      if (!createNewVersion && selectedVersion.id && data.versions && data.versions.length > 0) {
-        newIdx = data.versions.findIndex((v: any) => v.id === selectedVersion.id);
-        // If version not found, default to 0
+      if (!createNewVersion && selectedVersion.id && versions.length > 0) {
+        newIdx = versions.findIndex((v: any) => v.id === selectedVersion.id);
         if (newIdx === -1) newIdx = 0;
-      } else if (createNewVersion && data.versions && data.versions.length > 0) {
-        newIdx = 0; // Assume new version is first
+      } else if (createNewVersion && versions.length > 0) {
+        newIdx = 0;
       }
-      
+      newIdx = Math.min(newIdx, Math.max(0, versions.length - 1));
+
       // Update edit fields with the saved data
       let updatedEditFields;
-      if (data.versions && data.versions.length > 0) {
+      if (versions.length > 0) {
         setSelectedVersionIdx(newIdx);
-        updatedEditFields = { 
-          ...data.versions[newIdx], 
-          title: data.title, 
-          description: data.description, 
-          imageUrl: data.imageUrl 
+        const v = versions[newIdx];
+        updatedEditFields = {
+          ...(v || {}),
+          title: data.title ?? '',
+          description: data.description ?? '',
+          imageUrl: data.imageUrl,
         };
       } else {
         // Handle case where there are no versions - use the current editFields
@@ -399,7 +403,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
         </Box>
       </Box>
       <Typography variant="h6" mt={2}>{t('ingredients')}</Typography>
-      <Box component="pre" sx={{ background: '#f5f5f5', p: 2, borderRadius: 1, overflowX: 'auto' }}>
+      <Box sx={{ background: '#f5f5f5', p: 2, borderRadius: 1, overflowX: 'auto', '& p': { margin: '0.25em 0' }, '& ul, & ol': { margin: '0.25em 0', pl: 2 } }}>
         {isOwner && isEditing ? (
           <TextField
             value={editFields?.ingredients || ''}
@@ -407,14 +411,18 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
             variant="standard"
             fullWidth
             multiline
+            minRows={4}
+            placeholder="One per line or use markdown (**, -, 1. …). Single newlines = line breaks."
             InputProps={{ disableUnderline: true, style: { fontFamily: 'inherit', fontSize: 16 } }}
           />
         ) : (
-          editFields?.ingredients || selectedVersion.ingredients
+          <ReactMarkdown remarkPlugins={[remarkBreaks]} components={{ p: ({ children }) => <Typography component="p" sx={{ fontSize: 16, mb: 0.5 }}>{children}</Typography>, li: ({ children }) => <Typography component="li" sx={{ fontSize: 16, mb: 0.25 }}>{children}</Typography>, ul: ({ children }) => <Box component="ul" sx={{ m: 0, pl: 2 }}>{children}</Box>, ol: ({ children }) => <Box component="ol" sx={{ m: 0, pl: 2 }}>{children}</Box> }}>
+            {String(editFields?.ingredients ?? selectedVersion?.ingredients ?? '')}
+          </ReactMarkdown>
         )}
       </Box>
       <Typography variant="h6" mt={2}>{t('instructions')}</Typography>
-      <Box sx={{ background: '#f5f5f5', p: 2, borderRadius: 1 }}>
+      <Box sx={{ background: '#f5f5f5', p: 2, borderRadius: 1, '& p': { margin: '0.25em 0' }, '& ul, & ol': { margin: '0.25em 0', pl: 2 } }}>
         {isOwner && isEditing ? (
           <TextField
             value={editFields?.instructions || ''}
@@ -422,29 +430,14 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
             variant="standard"
             fullWidth
             multiline
+            minRows={6}
+            placeholder="One step per line or use markdown (**, ##, 1. …). Single newlines = line breaks."
             InputProps={{ disableUnderline: true, style: { fontFamily: 'inherit', fontSize: 16 } }}
           />
         ) : (
-          <Box component="ol" sx={{ m: 0, pl: 2 }}>
-            {(editFields?.instructions || selectedVersion.instructions)
-              .split('\n')
-              .filter(line => line.trim())
-              .map((instruction, index) => (
-                <Typography 
-                  key={index} 
-                  component="li" 
-                  sx={{ 
-                    mb: 1, 
-                    fontSize: 16,
-                    whiteSpace: 'normal',
-                    wordWrap: 'break-word',
-                    overflowWrap: 'break-word'
-                  }}
-                >
-                  {instruction.trim()}
-                </Typography>
-              ))}
-          </Box>
+          <ReactMarkdown remarkPlugins={[remarkBreaks]} components={{ p: ({ children }) => <Typography component="p" sx={{ fontSize: 16, mb: 0.5 }}>{children}</Typography>, li: ({ children }) => <Typography component="li" sx={{ fontSize: 16, mb: 0.25 }}>{children}</Typography>, ul: ({ children }) => <Box component="ul" sx={{ m: 0, pl: 2 }}>{children}</Box>, ol: ({ children }) => <Box component="ol" sx={{ m: 0, pl: 2 }}>{children}</Box> }}>
+            {String(editFields?.instructions ?? selectedVersion?.instructions ?? '')}
+          </ReactMarkdown>
         )}
       </Box>
       <Box sx={{ fontSize: '0.9em', color: 'text.secondary', mt: 2 }}>

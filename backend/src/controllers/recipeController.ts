@@ -95,6 +95,18 @@ export async function downloadAndSaveImage(imageUrl: string): Promise<string> {
 
   try {
     const url = new URL(imageUrl);
+    // If URL points to our own uploads (localhost /api/uploads/ or /uploads/), skip download
+    // and return the local path — avoids HTTPS-to-HTTP mismatch (wrong version number) on dev
+    const pathMatch = url.pathname.match(/^\/(?:api\/)?uploads\/(.+)$/);
+    if (pathMatch && (url.hostname === 'localhost' || url.hostname === '127.0.0.1')) {
+      const relativePath = pathMatch[1];
+      const localPath = path.join(process.cwd(), 'uploads', relativePath);
+      if (fs.existsSync(localPath)) {
+        return `/uploads/${relativePath}`;
+      }
+      // File missing; fall through to download (use http for localhost to avoid SSL error)
+    }
+
     const fileExt = url.pathname.split('.').pop()?.toLowerCase() || 'jpg';
     const validExts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
     const ext = validExts.includes(fileExt) ? fileExt : 'jpg';
@@ -119,17 +131,15 @@ export async function downloadAndSaveImage(imageUrl: string): Promise<string> {
       return `/uploads/${filename}`;
     }
 
-    // Download image
+    // Only external URLs reach here; localhost uploads are handled above and never fetched.
     const client = url.protocol === 'https:' ? https : http;
-    
+
     return new Promise((resolve, reject) => {
-      // Configure request options with SSL certificate ignore
       const requestOptions = {
         timeout: 10000,
-        // Ignore SSL certificate errors for sites with self-signed certificates
-        rejectUnauthorized: false
+        rejectUnauthorized: false,
       };
-      
+
       const request = client.get(imageUrl, requestOptions, (response) => {
         if (response.statusCode !== 200) {
           console.warn(`Failed to download image from ${imageUrl}: HTTP ${response.statusCode}. Using original URL.`);
@@ -297,16 +307,21 @@ export async function updateRecipe(req: Request, res: Response) {
       });
     }
 
-    // Return the updated recipe with current version
+    // Return the updated recipe with versions (same shape as GET so frontend does not crash)
     const recipe = await prisma.recipe.findUnique({
       where: { id: id },
       include: {
         user: true,
-        currentVersion: true,
+        versions: true,
       },
     });
 
-    res.json(recipe);
+    if (!recipe) {
+      return res.status(500).json({ error: 'Recipe not found after update' });
+    }
+    // Ensure versions is always an array so frontend never crashes
+    const payload = { ...recipe, versions: recipe.versions ?? [] };
+    res.json(payload);
   } catch (err: unknown) {
     if (err && typeof err === 'object' && 'code' in err) {
       const dbError = err as { code: string };
