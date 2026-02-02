@@ -261,13 +261,58 @@ export async function saveImportedRecipe(req: Request, res: Response) {
     const difficultyReasoning = result.difficultyReasoning ?? null;
     const localImageUrl = result.imageUrl ? await downloadAndSaveImage(result.imageUrl) : '';
 
+    const sourceUrlNormalized = (job.url || '').trim().replace(/\/$/, '') || null;
+
     const created = await prisma.$transaction(async (tx) => {
+      const existingRecipe =
+        sourceUrlNormalized || job.url
+          ? await tx.recipe.findFirst({
+              where: {
+                userId: dbUser.id,
+                sourceUrl: { in: [sourceUrlNormalized, job.url].filter(Boolean) as string[] },
+              },
+              select: { id: true },
+            })
+          : null;
+
+      if (existingRecipe) {
+        const version = await tx.recipeVersion.create({
+          data: {
+            recipeId: existingRecipe.id,
+            title,
+            description,
+            ingredients,
+            instructions,
+            imageUrl: localImageUrl,
+            name: `Imported ${new Date().toISOString().slice(0, 10)}`,
+          },
+        });
+        await tx.recipe.update({
+          where: { id: existingRecipe.id },
+          data: {
+            currentVersionId: version.id,
+            title,
+            description,
+            imageUrl: localImageUrl,
+            estimatedTime: cookTime,
+            difficulty,
+            timeReasoning,
+            difficultyReasoning,
+          },
+        });
+        await tx.importJob.update({
+          where: { id: jobId },
+          data: { savedRecipeId: existingRecipe.id, updatedAt: new Date() },
+        });
+        return existingRecipe.id;
+      }
+
       const recipe = await tx.recipe.create({
         data: {
           title,
           description,
           imageUrl: localImageUrl,
-          sourceUrl: job.url,
+          sourceUrl: sourceUrlNormalized ?? job.url,
           userId: dbUser.id,
           estimatedTime: cookTime,
           difficulty,
