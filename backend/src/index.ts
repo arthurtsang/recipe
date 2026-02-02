@@ -211,11 +211,32 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-const uploadsPath = path.resolve(__dirname, '../uploads');
+// Serve uploads from backend/uploads (process.cwd() when run from backend/)
+const uploadsPath = path.resolve(process.cwd(), 'uploads');
 app.use('/uploads', express.static(uploadsPath));
+app.use('/api/uploads', express.static(uploadsPath));
 
 // Import job routes
 import importJobRoutes from './routes/importJobs';
+
+// Middleware: for /api/imports, resolve Bearer token so requiresEnabledUser accepts API-token auth
+app.use('/api/imports', async (req: any, res, next) => {
+  if (req.oidc?.user?.email) return next();
+  const authHeader = req.headers.authorization;
+  if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim();
+    if (token) {
+      const user = await prisma.user.findFirst({
+        where: { apiToken: token, isEnabled: true },
+        select: { email: true },
+      });
+      if (user) {
+        req.oidc = { user: { email: user.email } };
+      }
+    }
+  }
+  next();
+});
 
 // Protect recipe creation and editing/
 app.use('/api/recipes', recipeRoutes);
