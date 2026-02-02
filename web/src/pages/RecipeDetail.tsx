@@ -4,6 +4,7 @@ import { Paper, Typography, Box, Button, TextField, Dialog, DialogTitle, DialogC
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
+import remarkGfm from 'remark-gfm';
 
 interface User {
   id: string;
@@ -106,18 +107,34 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   });
   const selectedVersion = versions[selectedVersionIdx] || {};
 
-  // Render markdown with visible blank-line spacing (runs of 2+ newlines become spacer boxes)
+  // Render markdown with visible blank-line spacing (runs of 2+ newlines become spacer boxes); GFM task lists - [ ] / - [x]
   const renderMarkdownWithBlankLines = (content: string) => {
     const str = String(content ?? '');
     const parts = str.split(/(\n{2,})/);
-    const mdComponents = { p: ({ children }: { children?: React.ReactNode }) => <Typography component="p" sx={{ fontSize: 16, mb: 0.5 }}>{children}</Typography>, li: ({ children }: { children?: React.ReactNode }) => <Typography component="li" sx={{ fontSize: 16, mb: 0.25 }}>{children}</Typography>, ul: ({ children }: { children?: React.ReactNode }) => <Box component="ul" sx={{ m: 0, pl: 2 }}>{children}</Box>, ol: ({ children }: { children?: React.ReactNode }) => <Box component="ol" sx={{ m: 0, pl: 2 }}>{children}</Box> };
+    const mdComponents = {
+      p: ({ children }: { children?: React.ReactNode }) => <Typography component="p" sx={{ fontSize: 16, mb: 0.5 }}>{children}</Typography>,
+      li: ({ children, node, ...props }: { children?: React.ReactNode; node?: { checked?: boolean } }) => {
+        const checked = node?.checked;
+        if (typeof checked === 'boolean') {
+          return (
+            <Box component="li" sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, fontSize: 16, mb: 0.25, listStyle: 'none' }}>
+              <Checkbox size="small" checked={checked} disabled sx={{ py: 0, mt: 0.25 }} />
+              <Typography component="span" sx={{ fontSize: 16 }}>{children}</Typography>
+            </Box>
+          );
+        }
+        return <Typography component="li" sx={{ fontSize: 16, mb: 0.25 }} {...props}>{children}</Typography>;
+      },
+      ul: ({ children }: { children?: React.ReactNode }) => <Box component="ul" sx={{ m: 0, pl: 2 }}>{children}</Box>,
+      ol: ({ children }: { children?: React.ReactNode }) => <Box component="ol" sx={{ m: 0, pl: 2 }}>{children}</Box>,
+    };
     return (
       <>
         {parts.map((part, i) =>
           /^\n+$/.test(part) ? (
             <Box key={i} sx={{ minHeight: '1em' }} aria-hidden />
           ) : (
-            <ReactMarkdown key={i} remarkPlugins={[remarkBreaks]} components={mdComponents}>
+            <ReactMarkdown key={i} remarkPlugins={[remarkBreaks, remarkGfm]} components={mdComponents}>
               {part.replace(/\n/g, '  \n')}
             </ReactMarkdown>
           )

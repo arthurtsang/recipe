@@ -24,7 +24,8 @@
     "react-i18next": "^15.6.0",
     "react-markdown": "^9.0.1",
     "react-router-dom": "^7.6.3",
-    "remark-breaks": "^4.0.0"
+    "remark-breaks": "^4.0.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.1",
