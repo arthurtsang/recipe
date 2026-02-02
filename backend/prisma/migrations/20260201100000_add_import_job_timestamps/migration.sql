@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "ImportJob" ADD COLUMN IF NOT EXISTS "startedAt" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "completedAt" TIMESTAMP(3);
