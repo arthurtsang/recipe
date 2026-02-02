@@ -81,10 +81,11 @@ export async function updateImportJobAiJobId(id: string, aiImportJobId: string):
   });
 }
 
-const POLL_INTERVAL_MS = 15000;
-const MAX_IMPORT_WAIT_MS = 30 * 60 * 1000;  // 30 min
+const POLL_INTERVAL_MS = 30000;   // How often we call AI status API (30 s)
+const MAX_IMPORT_WAIT_MS = 30 * 60 * 1000;  // 30 min (used only for timeout in blocking path)
 const AI_STATUS_REQUEST_TIMEOUT_MS = 120000; // 2 min per status GET; AI can be busy with LLM/Playwright
 const AI_POST_TIMEOUT_MS = 60000; // 1 min for POST (return jobId); AI may be slow to accept
+const SCHEDULER_INTERVAL_MS = 2 * 60 * 1000; // 2 min: check and start one job if none processing
 
 /** Check if POST response is a sync recipe result (old AI service) vs async { jobId }. */
 function isSyncRecipeResult(data: any): boolean {
@@ -172,6 +173,123 @@ export async function callAiImportAndWait(url: string, existingAiJobId?: string 
   throw new Error('AI service did not return jobId');
 }
 
+/** Start one import job: POST to AI, save jobId and set status processing. If AI returns sync result, update job completed. Does not block on polling. Used by scheduler and admin retry. Only starts if no other job is processing (1 at a time). */
+export async function startImportJobOnly(jobId: string): Promise<void> {
+  const job = await getImportJob(jobId);
+  if (!job || job.status === 'completed' || job.status === 'failed') return;
+
+  const processingCount = await prisma.importJob.count({ where: { status: 'processing' } });
+  if (processingCount > 0) return; // one already in flight
+
+  const startedAt = new Date();
+  await updateImportJobStatus(jobId, 'processing', undefined, undefined, { startedAt });
+  console.log(`[IMPORT] Started job ${jobId} for URL: ${job.url}`);
+
+  try {
+    const start = await startAiImport(job.url);
+    if (start.result != null) {
+      const completedAt = new Date();
+      await updateImportJobStatus(jobId, 'completed', start.result, undefined, { completedAt });
+      console.log(`[IMPORT] Job ${jobId} completed (sync result from AI)`);
+      startOnePendingJob().catch((err) => console.error('[IMPORT] Refill after sync completed:', err));
+      return;
+    }
+    if (start.aiJobId) {
+      await updateImportJobAiJobId(jobId, start.aiJobId);
+      console.log(`[IMPORT] Job ${jobId} AI jobId: ${start.aiJobId}, will poll status periodically`);
+      return;
+    }
+    throw new Error('AI service did not return jobId');
+  } catch (error: any) {
+    const errorMessage = axios.isAxiosError(error) && error.response?.data != null
+      ? (typeof error.response.data === 'string' ? error.response.data : JSON.stringify(error.response.data))
+      : (error instanceof Error ? error.message : 'Unknown error');
+    const completedAt = new Date();
+    await updateImportJobStatus(jobId, 'failed', undefined, errorMessage, { completedAt });
+    console.error(`[IMPORT] Job ${jobId} failed to start:`, errorMessage);
+  }
+}
+
+/** Poll the one processing import job: ensure at most one processing; if no AI job id, call import API and store it; if has AI job id, call status API; on status exception treat as no job id (reset to pending). */
+export async function pollProcessingImportJob(): Promise<void> {
+  await ensureAtMostOneProcessing();
+
+  const processing = await prisma.importJob.findFirst({
+    where: { status: 'processing' },
+    select: { id: true, aiImportJobId: true, url: true },
+  });
+  if (!processing) return;
+
+  const aiServiceUrl = (process.env.AI_SERVICE_URL || 'http://localhost:8001').replace(/\/$/, '');
+
+  // Processing job has no AI server job id: call import API and store job id (or sync result)
+  if (!processing.aiImportJobId) {
+    try {
+      const start = await startAiImport(processing.url);
+      if (start.result != null) {
+        const completedAt = new Date();
+        await updateImportJobStatus(processing.id, 'completed', start.result, undefined, { completedAt });
+        console.log(`[IMPORT] Job ${processing.id} completed (sync result from status poll)`);
+        startOnePendingJob().catch((err) => console.error('[IMPORT] Refill after sync completed:', err));
+        return;
+      }
+      if (start.aiJobId) {
+        await updateImportJobAiJobId(processing.id, start.aiJobId);
+        console.log(`[IMPORT] Job ${processing.id} AI jobId stored: ${start.aiJobId}, will poll status`);
+        return;
+      }
+      throw new Error('AI service did not return jobId');
+    } catch (e: any) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      console.error(`[IMPORT] Job ${processing.id} failed to start (no AI job id):`, errMsg);
+      const completedAt = new Date();
+      await updateImportJobStatus(processing.id, 'failed', undefined, errMsg, { completedAt });
+      startOnePendingJob().catch((err) => console.error('[IMPORT] Refill after start failed:', err));
+    }
+    return;
+  }
+
+  // Has AI job id: call AI server to check status
+  try {
+    const statusRes = await axios.get<{ status: string; result?: any; error?: string }>(
+      `${aiServiceUrl}/import-recipe/status/${processing.aiImportJobId}`,
+      { timeout: AI_STATUS_REQUEST_TIMEOUT_MS }
+    );
+    const { status, result, error } = statusRes.data ?? {};
+    if (status === 'completed' && result != null) {
+      const completedAt = new Date();
+      await updateImportJobStatus(processing.id, 'completed', result, undefined, { completedAt });
+      console.log(`[IMPORT] Job ${processing.id} completed (from status poll)`);
+      startOnePendingJob().catch((err) => console.error('[IMPORT] Refill after completed:', err));
+      return;
+    }
+    if (status === 'failed') {
+      const completedAt = new Date();
+      await updateImportJobStatus(processing.id, 'failed', undefined, error ?? 'Import failed', { completedAt });
+      console.log(`[IMPORT] Job ${processing.id} failed (from status poll): ${error ?? 'Import failed'}`);
+      startOnePendingJob().catch((err) => console.error('[IMPORT] Refill after failed:', err));
+      return;
+    }
+    // still pending or processing; next poll will check again
+  } catch (e: any) {
+    // Status API exception (e.g. job doesn't exist, 404, network error): treat as no AI job id, reset to pending
+    console.error(`[IMPORT] Status poll exception for job ${processing.id} (AI job ${processing.aiImportJobId}):`, e?.message ?? e);
+    await prisma.importJob.update({
+      where: { id: processing.id },
+      data: {
+        status: 'pending',
+        error: null,
+        startedAt: null,
+        completedAt: null,
+        aiImportJobId: null,
+        updatedAt: new Date(),
+      },
+    });
+    console.log(`[IMPORT] Job ${processing.id} reset to pending (status API exception); will retry`);
+    startOnePendingJob().catch((err) => console.error('[IMPORT] Refill after status exception:', err));
+  }
+}
+
 export async function processImportJob(jobId: string): Promise<void> {
   try {
     const job = await getImportJob(jobId);
@@ -239,8 +357,34 @@ export async function findPendingImportJobs(maxCount: number): Promise<ImportJob
 
 const STUCK_PROCESSING_MINUTES = 30;
 
+/** We only ever process 1 import at a time. If more than one job is "processing", reset the excess to pending. */
+export async function ensureAtMostOneProcessing(): Promise<number> {
+  const processing = await prisma.importJob.findMany({
+    where: { status: 'processing' },
+    select: { id: true, startedAt: true },
+    orderBy: { startedAt: 'desc' },
+  });
+  if (processing.length <= 1) return 0;
+  const toReset = processing.slice(1);
+  const ids = toReset.map((j) => j.id);
+  await prisma.importJob.updateMany({
+    where: { id: { in: ids } },
+    data: {
+      status: 'pending',
+      error: null,
+      startedAt: null,
+      completedAt: null,
+      aiImportJobId: null,
+      updatedAt: new Date(),
+    },
+  });
+  console.log(`[IMPORT] ensureAtMostOneProcessing: reset ${ids.length} excess "processing" job(s) to pending`);
+  return ids.length;
+}
+
 /** Reset jobs stuck in "processing" for too long back to "pending" so they get retried. */
 export async function resetStuckProcessingJobs(): Promise<number> {
+  await ensureAtMostOneProcessing();
   const cutoff = new Date(Date.now() - STUCK_PROCESSING_MINUTES * 60 * 1000);
   const result = await prisma.importJob.updateMany({
     where: { status: 'processing', updatedAt: { lt: cutoff } },
@@ -285,7 +429,7 @@ export async function resetProcessingJobsOnStartup(): Promise<void> {
         await updateImportJobStatus(job.id, 'failed', undefined, error ?? 'Import failed', { completedAt: new Date() });
         console.log(`[IMPORT] Startup: synced job ${job.id} to failed from AI`);
       } else {
-        processImportJob(job.id).catch((err) => console.error(`[IMPORT] Startup resume job ${job.id}:`, err));
+        // Still in progress; leave in processing, status poll will pick it up
       }
     } catch (e: any) {
       if (axios.isAxiosError(e) && e.response?.status === 404) {
@@ -295,7 +439,7 @@ export async function resetProcessingJobsOnStartup(): Promise<void> {
         });
         resetCount++;
       } else {
-        processImportJob(job.id).catch((err) => console.error(`[IMPORT] Startup resume job ${job.id}:`, err));
+        // Leave in processing; status poll will retry or we can reset to pending after stuck timeout
       }
     }
   }
@@ -304,57 +448,55 @@ export async function resetProcessingJobsOnStartup(): Promise<void> {
   }
 }
 
-/** Start exactly one pending job if any (used to refill a slot when one completes). */
+/** Start exactly one pending job if none is processing: POST to AI, save jobId, set processing. Status poll will complete it and refill. */
 async function startOnePendingJob(): Promise<void> {
+  await ensureAtMostOneProcessing();
   await resetStuckProcessingJobs();
+  const processingCount = await prisma.importJob.count({ where: { status: 'processing' } });
+  if (processingCount > 0) return; // one already in flight; status poll will refill when done
   const jobs = await findPendingImportJobs(1);
   if (jobs.length === 0) return;
   const job = jobs[0];
-  console.log(`[IMPORT] Scheduler: refill slot, processing job ${job.id}`);
-  processImportJob(job.id)
-    .catch((err) => console.error(`[IMPORT] Scheduler: failed to process job ${job.id}:`, err))
-    .finally(() => {
-      startOnePendingJob().catch((err) => console.error('[IMPORT] Scheduler refill error:', err));
-    });
+  console.log(`[IMPORT] Scheduler: starting job ${job.id}`);
+  startImportJobOnly(job.id).catch((err) => console.error(`[IMPORT] Scheduler: failed to start job ${job.id}:`, err));
 }
 
-/** Process pending jobs from the DB. Processes up to 2 at a time in parallel.
- *  When each job completes, refills that slot immediately so we keep 2 in flight until the queue is empty. */
-async function runImportWorker(): Promise<void> {
+/** 2-min tick: ensure at most one processing, reset stuck, then start one if none processing. */
+async function runImportSchedulerTick(): Promise<void> {
+  await ensureAtMostOneProcessing();
   await resetStuckProcessingJobs();
-  const jobs = await findPendingImportJobs(2);
+  const processingCount = await prisma.importJob.count({ where: { status: 'processing' } });
+  if (processingCount > 0) return;
+  const jobs = await findPendingImportJobs(1);
   if (jobs.length === 0) return;
-  console.log(`[IMPORT] Scheduler: processing ${jobs.length} job(s) in parallel`);
-  await Promise.all(
-    jobs.map((job) =>
-      processImportJob(job.id)
-        .catch((err) => console.error(`[IMPORT] Scheduler: failed to process job ${job.id}:`, err))
-        .finally(() => {
-          startOnePendingJob().catch((err) =>
-            console.error('[IMPORT] Scheduler refill error:', err)
-          );
-        })
-    )
-  );
+  const job = jobs[0];
+  console.log(`[IMPORT] Scheduler (2 min): starting job ${job.id}`);
+  startImportJobOnly(job.id).catch((err) => console.error(`[IMPORT] Scheduler: failed to start job ${job.id}:`, err));
 }
 
-/** Entry point: pick up to 2 pending jobs and process; refill when each completes. */
+/** Entry point for 2-min interval: check and start one job if none processing. */
 export async function processPendingImportJobs(): Promise<void> {
-  await runImportWorker();
+  await runImportSchedulerTick();
 }
 
 export function startImportJobScheduler(): void {
-  const intervalMs = 2 * 60 * 1000; // every 2 minutes (catches any missed refills, e.g. after restart)
-  // On startup, any job left in "processing" is orphaned (previous process died); reset to pending so they retry
+  // On startup: sync any orphaned "processing" jobs; start one if none processing; then run status poll once so we query AI right away
   resetProcessingJobsOnStartup()
-    .then(() => processPendingImportJobs())
-    .catch((err) => console.error('[IMPORT] Scheduler error:', err));
+    .then(() => startOnePendingJob())
+    .then(() => pollProcessingImportJob())
+    .catch((err) => console.error('[IMPORT] Scheduler startup error:', err));
+
+  // Every 2 min: ensure at most one processing, then start one job if none processing (no triggers needed)
   setInterval(() => {
-    processPendingImportJobs().catch((err) =>
-      console.error('[IMPORT] Scheduler error:', err)
-    );
-  }, intervalMs);
-  console.log('[IMPORT] Import job scheduler started (refill on completion, interval every 2 min)');
+    runImportSchedulerTick().catch((err) => console.error('[IMPORT] Scheduler 2-min tick error:', err));
+  }, SCHEDULER_INTERVAL_MS);
+
+  // Periodically call AI status API (or start import if processing has no AI job id); when completed/failed, update DB and send next job right away
+  setInterval(() => {
+    pollProcessingImportJob().catch((err) => console.error('[IMPORT] Status poll error:', err));
+  }, POLL_INTERVAL_MS);
+
+  console.log(`[IMPORT] Import job scheduler started: check every ${SCHEDULER_INTERVAL_MS / 60000} min, status poll every ${POLL_INTERVAL_MS / 1000} s`);
 }
 
 export async function cleanupOldImportJobs(): Promise<void> {

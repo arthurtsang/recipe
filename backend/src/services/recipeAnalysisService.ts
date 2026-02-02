@@ -90,29 +90,23 @@ export async function findRecipesNeedingAnalysis(limit: number = 10): Promise<st
 export async function processRecipeAnalysisQueue(): Promise<void> {
   try {
     console.log('[recipe-analysis] Starting recipe analysis queue processing...');
-    
-    // Find recipes that need analysis
-    const recipeIds = await findRecipesNeedingAnalysis(5); // Process 5 at a time
-    
+    // One recipe at a time to avoid overloading the AI server
+    const recipeIds = await findRecipesNeedingAnalysis(1);
+
     if (recipeIds.length === 0) {
       console.log('[recipe-analysis] No recipes need analysis');
       return;
     }
 
-    console.log(`[recipe-analysis] Found ${recipeIds.length} recipes needing analysis`);
+    const recipeId = recipeIds[0];
+    console.log(`[recipe-analysis] Processing 1 recipe: ${recipeId}`);
 
-    // Process each recipe
-    for (const recipeId of recipeIds) {
-      try {
-        await analyzeRecipeWithAI(recipeId);
-        // Add a small delay between requests to avoid overwhelming the AI service
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      } catch (error) {
-        console.error(`[recipe-analysis] Failed to analyze recipe ${recipeId}:`, error);
-      }
+    try {
+      await analyzeRecipeWithAI(recipeId);
+      console.log('[recipe-analysis] Recipe analysis queue processing complete');
+    } catch (error) {
+      console.error(`[recipe-analysis] Failed to analyze recipe ${recipeId}:`, error);
     }
-
-    console.log('[recipe-analysis] Recipe analysis queue processing complete');
 
   } catch (error) {
     console.error('[recipe-analysis] Error processing recipe analysis queue:', error);

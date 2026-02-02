@@ -10,6 +10,8 @@ import cors from 'cors';
 import * as recipeController from './controllers/recipeController';
 import * as userService from './services/userService';
 import tagRoutes from './routes/tags';
+import { startImportJobOnly, ensureAtMostOneProcessing } from './services/importJobService';
+import { findRecipesNeedingAnalysis } from './services/recipeAnalysisService';
 
 // Load environment variables
 dotenv.config();
@@ -206,6 +208,105 @@ app.patch('/api/admin/users/:id/enable', requiresAuth(), requiresAdmin(), async 
   }
 });
 
+// Admin queue status (import queue + recipe analysis queue)
+app.get('/api/admin/queues', requiresAuth(), requiresAdmin(), async (req, res) => {
+  try {
+    // We only ever have 1 import processing at a time; fix DB if stale
+    await ensureAtMostOneProcessing();
+    const [pendingJobs, processingJobs, recentFailed, recentCompleted, pendingRecipeIds, recentAnalyzed] = await Promise.all([
+      prisma.importJob.findMany({
+        where: { status: 'pending' },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, url: true, userId: true, createdAt: true, updatedAt: true, startedAt: true, completedAt: true, error: true },
+      }),
+      prisma.importJob.findMany({
+        where: { status: 'processing' },
+        orderBy: { startedAt: 'asc' },
+        select: { id: true, url: true, userId: true, createdAt: true, updatedAt: true, startedAt: true, completedAt: true, error: true },
+      }),
+      prisma.importJob.findMany({
+        where: { status: 'failed' },
+        orderBy: { completedAt: 'desc' },
+        take: 20,
+        select: { id: true, url: true, userId: true, createdAt: true, updatedAt: true, startedAt: true, completedAt: true, error: true },
+      }),
+      prisma.importJob.findMany({
+        where: { status: 'completed' },
+        orderBy: { completedAt: 'desc' },
+        take: 20,
+        select: { id: true, url: true, userId: true, createdAt: true, updatedAt: true, startedAt: true, completedAt: true, error: true },
+      }),
+      findRecipesNeedingAnalysis(100),
+      prisma.recipe.findMany({
+        where: { estimatedTime: { not: null }, difficulty: { not: null } },
+        orderBy: { updatedAt: 'desc' },
+        take: 20,
+        select: { id: true, title: true, createdAt: true, updatedAt: true },
+      }),
+    ]);
+
+    const pendingRecipes =
+      pendingRecipeIds.length === 0
+        ? []
+        : await prisma.recipe.findMany({
+            where: { id: { in: pendingRecipeIds } },
+            select: { id: true, title: true, createdAt: true, updatedAt: true },
+            orderBy: { createdAt: 'desc' },
+          });
+
+    res.json({
+      import: {
+        pendingCount: pendingJobs.length,
+        processingCount: processingJobs.length,
+        pendingJobs,
+        processingJobs,
+        recentFailed,
+        recentCompleted,
+      },
+      recipeAnalysis: {
+        pendingCount: pendingRecipeIds.length,
+        pendingRecipes,
+        recentAnalyzedRecipes: recentAnalyzed,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching admin queues:', error);
+    res.status(500).json({ error: 'Failed to fetch queues' });
+  }
+});
+
+// Retry all failed import jobs: reset to pending; scheduler will pick them up one at a time
+app.post('/api/admin/import-jobs/retry-all', requiresAuth(), requiresAdmin(), async (req, res) => {
+  try {
+    const result = await prisma.importJob.updateMany({
+      where: { status: 'failed' },
+      data: { status: 'pending', error: null, result: null, startedAt: null, completedAt: null, savedRecipeId: null, aiImportJobId: null, updatedAt: new Date() },
+    });
+    res.json({ message: `${result.count} failed job(s) queued for retry`, count: result.count });
+  } catch (error) {
+    console.error('Error retrying failed import jobs:', error);
+    res.status(500).json({ error: 'Failed to retry jobs' });
+  }
+});
+
+// Retry a single import job: reset to pending and start it (POST to AI); status poll will complete it
+app.post('/api/admin/import-jobs/:id/retry', requiresAuth(), requiresAdmin(), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const job = await prisma.importJob.findUnique({ where: { id } });
+    if (!job) return res.status(404).json({ error: 'Import job not found' });
+    await prisma.importJob.update({
+      where: { id },
+      data: { status: 'pending', error: null, result: null, startedAt: null, completedAt: null, savedRecipeId: null, aiImportJobId: null, updatedAt: new Date() },
+    });
+    startImportJobOnly(id).catch((err) => console.error(`[IMPORT] Admin retry job ${id}:`, err));
+    res.json({ message: 'Job queued for retry', jobId: id });
+  } catch (error) {
+    console.error('Error retrying import job:', error);
+    res.status(500).json({ error: 'Failed to retry job' });
+  }
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
@@ -263,13 +364,13 @@ app.get(/^\/(?!api|uploads|auth|static).*/, (req, res) => {
   res.sendFile(path.join(__dirname, '../../web/dist', 'index.html'));
 });
 
-// Start recipe analysis scheduler
+// Start background schedulers
 import { startRecipeAnalysisScheduler } from './services/recipeAnalysisService';
+import { startImportJobScheduler } from './services/importJobService';
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
-  
-  // Start the background recipe analysis scheduler
   startRecipeAnalysisScheduler();
+  startImportJobScheduler();
 });
