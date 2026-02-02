@@ -141,6 +141,25 @@ const requiresAdmin = () => {
   };
 };
 
+// Resolve Bearer token so /api/me and other routes accept API-token auth (e.g. save-mabels-imports.ts)
+app.use(async (req: any, res, next) => {
+  if (req.oidc?.user?.email) return next();
+  const authHeader = req.headers.authorization;
+  if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim();
+    if (token) {
+      const user = await prisma.user.findFirst({
+        where: { apiToken: token, isEnabled: true },
+        select: { id: true, email: true },
+      });
+      if (user) {
+        req.oidc = { user: { email: user.email, id: user.id } };
+      }
+    }
+  }
+  next();
+});
+
 // Endpoint to get current user info
 app.get('/api/me', requiresAuth(), async (req: any, res) => {
   // Debug: Log the entire OIDC object for comparison
