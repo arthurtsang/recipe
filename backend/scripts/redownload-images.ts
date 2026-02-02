@@ -295,7 +295,7 @@ async function redownloadRecipeImages() {
             headers['Authorization'] = `Bearer ${apiKey}`;
           }
           
-          const response = await axios.post(`${aiServiceUrl}/recipe/import`, 
+          const response = await axios.post(`${aiServiceUrl}/import-recipe`, 
             { url: recipe.sourceUrl },
             { headers }
           );
@@ -386,7 +386,7 @@ async function redownloadRecipeImages() {
           headers['Authorization'] = `Bearer ${apiKey}`;
         }
         
-        const response = await axios.post(`${aiServiceUrl}/recipe/import`, 
+        const response = await axios.post(`${aiServiceUrl}/import-recipe`, 
           { url: recipe.sourceUrl },
           { headers }
         );

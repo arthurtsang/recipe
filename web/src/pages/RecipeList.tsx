@@ -75,7 +75,6 @@ export default function RecipeList() {
         return JSON.parse(text);
       })
       .then(data => {
-        console.log('RecipeList Debug - API Response:', data);
         setRecipes(prev => page === 1 ? data : [...prev, ...data]);
         setHasMore(data.length === pageSize);
       })

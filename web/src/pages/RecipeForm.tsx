@@ -179,11 +179,7 @@ const RecipeForm: React.FC<{ user: User | null }> = ({ user }) => {
                 alt="Preview" 
                 style={{ maxWidth: 200, maxHeight: 200, objectFit: 'contain', display: 'block' }} 
                 onError={(e) => {
-                  console.warn('Failed to load image:', imagePreview || imageUrl);
                   e.currentTarget.style.display = 'none';
-                }}
-                onLoad={() => {
-                  console.log('Image loaded successfully:', imagePreview || imageUrl);
                 }}
               />
             </Box>

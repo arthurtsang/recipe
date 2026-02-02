@@ -1,5 +1,7 @@
 {
   "appTitle": "Metro Bistro",
+  "login": "Login",
+  "logout": "Logout",
   "recipes": "Recipes",
   "searchPlaceholder": "Search recipes...",
   "addRecipe": "Add Recipe",

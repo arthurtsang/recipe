@@ -1,5 +1,7 @@
 {
   "appTitle": "Metro Bistro",
+  "login": "登入",
+  "logout": "登出",
   "recipes": "食譜",
   "searchPlaceholder": "搜尋食譜...",
   "addRecipe": "新增食譜",

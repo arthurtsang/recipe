@@ -7,13 +7,17 @@ import ImportRecipe from './components/ImportRecipe';
 import ImportHistory from './components/ImportHistory';
 import RecipeChat from './components/RecipeChat';
 import AdminUserApproval from './components/AdminUserApproval';
+import AdminQueueStatus from './components/AdminQueueStatus';
 import PendingApproval from './components/PendingApproval';
+import ManageApiToken from './components/ManageApiToken';
 import { Container, CssBaseline, AppBar, Toolbar, Typography, Button, Avatar, Menu, MenuItem, IconButton, ListItemIcon, Box, ThemeProvider, Fab } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AddIcon from '@mui/icons-material/Add';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import ChatIcon from '@mui/icons-material/Chat';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import QueueIcon from '@mui/icons-material/Queue';
+import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import { useTranslation } from 'react-i18next';
 import i18n from './i18n';
 import { theme } from './theme';
@@ -35,6 +39,8 @@ function App() {
   const [importHistoryOpen, setImportHistoryOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [adminDialogOpen, setAdminDialogOpen] = useState(false);
+  const [queueDialogOpen, setQueueDialogOpen] = useState(false);
+  const [tokenDialogOpen, setTokenDialogOpen] = useState(false);
   const open = Boolean(anchorEl);
   const { t } = useTranslation();
   const currentLang = i18n.language?.split('-')[0] || 'en';
@@ -150,13 +156,27 @@ function App() {
                     </ListItemIcon>
                     Import History
                   </MenuItem>
+                  <MenuItem onClick={() => setTokenDialogOpen(true)}>
+                    <ListItemIcon>
+                      <VpnKeyIcon fontSize="small" />
+                    </ListItemIcon>
+                    Manage API Token
+                  </MenuItem>
                   {user.isAdmin && (
-                    <MenuItem onClick={() => setAdminDialogOpen(true)}>
-                      <ListItemIcon>
-                        <AdminPanelSettingsIcon fontSize="small" />
-                      </ListItemIcon>
-                      User Management
-                    </MenuItem>
+                    <>
+                      <MenuItem onClick={() => setAdminDialogOpen(true)}>
+                        <ListItemIcon>
+                          <AdminPanelSettingsIcon fontSize="small" />
+                        </ListItemIcon>
+                        User Management
+                      </MenuItem>
+                      <MenuItem onClick={() => setQueueDialogOpen(true)}>
+                        <ListItemIcon>
+                          <QueueIcon fontSize="small" />
+                        </ListItemIcon>
+                        Queue Status
+                      </MenuItem>
+                    </>
                   )}
                   <MenuItem component="a" href="/logout">
                     <ListItemIcon>
@@ -219,6 +239,16 @@ function App() {
       <AdminUserApproval
         open={adminDialogOpen}
         onClose={() => setAdminDialogOpen(false)}
+      />
+      
+      <AdminQueueStatus
+        open={queueDialogOpen}
+        onClose={() => setQueueDialogOpen(false)}
+      />
+      
+      <ManageApiToken
+        open={tokenDialogOpen}
+        onClose={() => setTokenDialogOpen(false)}
       />
     </ThemeProvider>
   );

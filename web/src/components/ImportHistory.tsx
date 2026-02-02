@@ -14,9 +14,14 @@ import {
   Chip,
   IconButton,
   CircularProgress,
-  Alert
+  Alert,
+  Link,
+  Collapse,
+  Paper,
 } from '@mui/material';
-import { Close as CloseIcon, Refresh as RefreshIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import { Close as CloseIcon, Refresh as RefreshIcon, Delete as DeleteIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material';
 
 import { useNavigate } from 'react-router-dom';
 
@@ -31,8 +36,11 @@ interface ImportJob {
   status: 'pending' | 'processing' | 'completed' | 'failed';
   result?: any;
   error?: string;
+  savedRecipeId?: string | null;
   createdAt: string;
   updatedAt: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
 }
 
 const ImportHistory: React.FC<ImportHistoryProps> = ({ open, onClose }) => {
@@ -42,6 +50,7 @@ const ImportHistory: React.FC<ImportHistoryProps> = ({ open, onClose }) => {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [expandedResponseId, setExpandedResponseId] = useState<string | null>(null);
 
   const fetchImports = async () => {
     setLoading(true);
@@ -73,45 +82,29 @@ const ImportHistory: React.FC<ImportHistoryProps> = ({ open, onClose }) => {
 
   const handleSaveRecipe = async (job: ImportJob) => {
     if (!job.result) return;
+    if (job.savedRecipeId) return; // Already saved; idempotent
 
     setSaving(job.id);
     try {
-      const response = await fetch('/api/recipes', {
+      const response = await fetch(`/api/imports/${job.id}/save-recipe`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: job.result.title,
-          description: job.result.description,
-          ingredients: job.result.ingredients,
-          instructions: job.result.instructions,
-          imageUrl: job.result.imageUrl,
-          sourceUrl: job.url, // Use the import job URL as source
-          estimatedTime: job.result.estimatedTime,
-          difficulty: job.result.difficulty,
-          timeReasoning: job.result.timeReasoning,
-          difficultyReasoning: job.result.difficultyReasoning,
-        }),
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || 'Failed to save recipe');
       }
 
       const data = await response.json();
-      
-      // Mark this job as saved in the local state
-      setImports(prev => prev.map(importJob => 
-        importJob.id === job.id 
-          ? { ...importJob, result: { ...importJob.result, saved: true } }
-          : importJob
+      const recipeId = data?.id;
+
+      setImports(prev => prev.map(importJob =>
+        importJob.id === job.id ? { ...importJob, savedRecipeId: recipeId } : importJob
       ));
       
-      onClose();
-      navigate(`/recipes/${data.id}`);
+      // Don't navigate - stay on the import history page
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save recipe');
     } finally {
@@ -216,19 +209,40 @@ const ImportHistory: React.FC<ImportHistoryProps> = ({ open, onClose }) => {
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         Created: {formatDate(job.createdAt)}
+                        {job.startedAt != null && ` · Started: ${formatDate(job.startedAt)}`}
+                        {job.completedAt != null && ` · Completed: ${formatDate(job.completedAt)}`}
                       </Typography>
                       {job.error && (
-                        <Typography variant="body2" color="error" sx={{ mt: 1 }}>
-                          Error: {job.error}
+                        <Typography variant="body2" color="error" sx={{ mt: 0.5 }}>
+                          Error: {job.error.length > 120 ? job.error.slice(0, 120) + '…' : job.error}
                         </Typography>
                       )}
+                      <Button
+                        size="small"
+                        startIcon={expandedResponseId === job.id ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                        onClick={() => setExpandedResponseId(expandedResponseId === job.id ? null : job.id)}
+                        sx={{ mt: 0.5, textTransform: 'none' }}
+                      >
+                        {expandedResponseId === job.id ? 'Hide' : 'Show'} AI service response
+                      </Button>
+                      <Collapse in={expandedResponseId === job.id}>
+                        <Paper variant="outlined" sx={{ p: 1.5, mt: 1, bgcolor: 'grey.50', maxHeight: 220, overflow: 'auto' }}>
+                          <Typography component="pre" variant="caption" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                            {job.status === 'failed' && job.error
+                              ? job.error
+                              : job.result != null
+                                ? JSON.stringify(job.result, null, 2)
+                                : 'No response data'}
+                          </Typography>
+                        </Paper>
+                      </Collapse>
                     </Box>
                   }
                 />
                 
                 <ListItemSecondaryAction>
                   <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                    {job.status === 'completed' && job.result && !job.result.saved && (
+                    {job.status === 'completed' && job.result && !job.savedRecipeId && (
                       <Button
                         variant="contained"
                         size="small"
@@ -239,8 +253,27 @@ const ImportHistory: React.FC<ImportHistoryProps> = ({ open, onClose }) => {
                         {saving === job.id ? 'Saving...' : 'Save Recipe'}
                       </Button>
                     )}
-                    {job.status === 'completed' && job.result && job.result.saved && (
-                      <Chip label="Saved" color="success" size="small" />
+                    {job.status === 'completed' && job.result && job.savedRecipeId && (
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        <Chip label="Imported" color="success" size="small" />
+                        <Link
+                          href={`/recipes/${job.savedRecipeId}`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            navigate(`/recipes/${job.savedRecipeId}`);
+                          }}
+                          sx={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 0.5,
+                            textDecoration: 'none',
+                            fontSize: '0.875rem'
+                          }}
+                        >
+                          <OpenInNewIcon fontSize="small" />
+                          Open Recipe
+                        </Link>
+                      </Box>
                     )}
                     <IconButton
                       size="small"

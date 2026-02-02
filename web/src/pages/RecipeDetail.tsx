@@ -249,22 +249,13 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   if (error) return <Typography color="error">{t('error')}: {error}</Typography>;
   if (!recipe) return <Typography>{t('recipeNotFound')}</Typography>;
 
-  // Fix image URL if it's a relative path
-  // Get imageUrl from editFields (version), recipe, or selected version
+  // Image URL: /uploads/ -> /api/uploads/ (backend serves there), external -> proxy
   let imageUrl = editFields?.imageUrl || recipe?.imageUrl || selectedVersion?.imageUrl;
-  
-  // Handle relative paths
   if (imageUrl && imageUrl.startsWith('/uploads/')) {
-    imageUrl = `${window.location.origin}${imageUrl}`;
-  }
-  
-  // Fix localhost URLs from backend (replace with current origin)
-  if (imageUrl && imageUrl.includes('localhost:8081')) {
+    imageUrl = `${window.location.origin}/api/uploads/${imageUrl.replace(/^\/uploads\/?/, '')}`;
+  } else if (imageUrl && imageUrl.includes('localhost:8081')) {
     imageUrl = imageUrl.replace(/https?:\/\/localhost:8081/, window.location.origin);
-  }
-  
-  // Handle external images with proxy endpoint (for CORS)
-  if (imageUrl && imageUrl.startsWith('http') && !imageUrl.startsWith(window.location.origin)) {
+  } else if (imageUrl && imageUrl.startsWith('http') && !imageUrl.startsWith(window.location.origin)) {
     imageUrl = `/api/recipes/proxy-image?url=${encodeURIComponent(imageUrl)}`;
   }
 
@@ -310,11 +301,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
             alt={editFields?.title || recipe?.title || ''} 
             style={{ maxWidth: 400, width: '100%', objectFit: 'contain' }} 
             onError={(e) => {
-              console.warn('Failed to load image:', imageUrl);
               e.currentTarget.style.display = 'none';
-            }}
-            onLoad={() => {
-              console.log('Image loaded successfully:', imageUrl);
             }}
           />
         </Box>

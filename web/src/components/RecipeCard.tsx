@@ -85,17 +85,17 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
   const estimatedTime = getEstimatedTime();
   const difficulty = getDifficulty();
 
-  // Debug logging
-  console.log('RecipeCard Debug:', {
-    title: recipe.title,
-    versions: recipe.versions,
-    ingredientCount,
-    instructionCount,
-    estimatedTime,
-    difficulty: difficulty.level,
-    recipeEstimatedTime: recipe.estimatedTime,
-    recipeDifficulty: recipe.difficulty
-  });
+  // Image src: /uploads/ -> /api/uploads/ (backend serves there), external -> proxy
+  const imageSrc = (() => {
+    if (!recipe.imageUrl) return undefined;
+    if (recipe.imageUrl.startsWith('/uploads/')) {
+      return `${window.location.origin}/api/uploads/${recipe.imageUrl.replace(/^\/uploads\/?/, '')}`;
+    }
+    if (recipe.imageUrl.startsWith('http') && !recipe.imageUrl.startsWith(window.location.origin)) {
+      return `/api/recipes/proxy-image?url=${encodeURIComponent(recipe.imageUrl)}`;
+    }
+    return recipe.imageUrl;
+  })();
 
   return (
     <Card
@@ -186,11 +186,11 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
           )}
 
           {/* Image */}
-          {recipe.imageUrl && (
+          {imageSrc && (
             <Box mb={1.5} display="flex" justifyContent="center">
               <CardMedia
                 component="img"
-                image={recipe.imageUrl.startsWith('/uploads/') ? `${window.location.origin}${recipe.imageUrl}` : recipe.imageUrl}
+                image={imageSrc}
                 alt={recipe.title}
                 sx={{ maxHeight: 200, maxWidth: '100%', objectFit: 'contain', borderRadius: 2, boxShadow: 1 }}
               />

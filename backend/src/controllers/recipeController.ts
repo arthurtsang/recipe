@@ -20,8 +20,8 @@ interface MulterRequest extends Request {
 
 const prisma = new PrismaClient();
 
-const uploadDir = path.join(__dirname, '../../uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+const uploadDir = path.resolve(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
 const storage = multer.diskStorage({
   destination: (req: ExpressRequest, file: any, cb: (error: Error | null, destination: string) => void) => cb(null, uploadDir),
@@ -71,28 +71,13 @@ export async function getRecipeById(req: Request, res: Response) {
   try {
     const recipe = await recipeService.getRecipeById(req.params.id);
     if (!recipe) return res.status(404).json({ error: 'Recipe not found' });
-    console.log('Recipe loaded', recipe);
-    
-    // Use the current request's host instead of hardcoded BASE_URL
-    // Prefer X-Forwarded-Host (from proxy) or Origin header, fallback to host
-    const forwardedHost = req.get('x-forwarded-host');
-    const origin = req.get('origin');
-    const protocol = req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http');
-    const host = forwardedHost || (origin ? new URL(origin).host : req.get('host'));
-    
-    // Fix recipe imageUrl
+
+    // Rewrite /uploads/ to /api/uploads/ so frontend hits our static middleware
     if (recipe.imageUrl?.startsWith('/uploads/')) {
+      recipe.imageUrl = recipe.imageUrl.replace(/^\/uploads\/?/, '/api/uploads/');
+      const protocol = req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http');
+      const host = req.get('host');
       recipe.imageUrl = `${protocol}://${host}${recipe.imageUrl}`;
-    }
-    
-    // Fix version imageUrls
-    if (recipe.versions) {
-      recipe.versions = recipe.versions.map((version: any) => {
-        if (version.imageUrl?.startsWith('/uploads/')) {
-          version.imageUrl = `${protocol}://${host}${version.imageUrl}`;
-        }
-        return version;
-      });
     }
     
     res.json(recipe);
@@ -103,7 +88,7 @@ export async function getRecipeById(req: Request, res: Response) {
 }
 
 // Function to download external image and save locally
-async function downloadAndSaveImage(imageUrl: string): Promise<string> {
+export async function downloadAndSaveImage(imageUrl: string): Promise<string> {
   if (!imageUrl || !imageUrl.startsWith('http')) {
     return imageUrl; // Return as-is if not external URL
   }
@@ -137,67 +122,58 @@ async function downloadAndSaveImage(imageUrl: string): Promise<string> {
     // Download image
     const client = url.protocol === 'https:' ? https : http;
     
-    try {
-      return await new Promise<string>((resolve, reject) => {
-        // Configure request options with SSL certificate ignore
-        const requestOptions = {
-          timeout: 10000,
-          // Ignore SSL certificate errors for sites with self-signed certificates
-          rejectUnauthorized: false
-        };
-        
-        const request = client.get(imageUrl, requestOptions, (response) => {
-          if (response.statusCode !== 200) {
-            console.warn(`Failed to download image from ${imageUrl}: HTTP ${response.statusCode}. Returning empty string.`);
-            // Return empty string instead of original URL to avoid broken external links
-            resolve('');
-            return;
-          }
+    return new Promise((resolve, reject) => {
+      // Configure request options with SSL certificate ignore
+      const requestOptions = {
+        timeout: 10000,
+        // Ignore SSL certificate errors for sites with self-signed certificates
+        rejectUnauthorized: false
+      };
+      
+      const request = client.get(imageUrl, requestOptions, (response) => {
+        if (response.statusCode !== 200) {
+          console.warn(`Failed to download image from ${imageUrl}: HTTP ${response.statusCode}. Using original URL.`);
+          // For any non-200 status, fall back to original URL instead of failing
+          resolve(imageUrl);
+          return;
+        }
 
-          const fileStream = fs.createWriteStream(filepath);
-          response.pipe(fileStream);
+        const fileStream = fs.createWriteStream(filepath);
+        response.pipe(fileStream);
 
-          fileStream.on('finish', () => {
-            fileStream.close();
-            console.log(`Successfully downloaded image to ${filepath}`);
-            resolve(`/uploads/${filename}`);
-          });
-
-          fileStream.on('error', (err) => {
-            console.error(`Error writing file ${filepath}:`, err);
-            fs.unlink(filepath, () => {}); // Delete partial file
-            // Return empty string instead of rejecting
-            resolve('');
-          });
+        fileStream.on('finish', () => {
+          fileStream.close();
+          console.log(`Successfully downloaded image to ${filepath}`);
+          resolve(`/uploads/${filename}`);
         });
 
-        request.on('error', (err) => {
-          console.error(`Error downloading from ${imageUrl}:`, err);
-          // Return empty string instead of rejecting
-          resolve('');
-        });
-
-        request.setTimeout(10000, () => {
-          request.destroy();
-          // Return empty string instead of rejecting
-          resolve('');
+        fileStream.on('error', (err) => {
+          console.error(`Error writing file ${filepath}:`, err);
+          fs.unlink(filepath, () => {}); // Delete partial file
+          reject(err);
         });
       });
-    } catch (promiseError) {
-      console.error('Promise error in downloadAndSaveImage:', promiseError);
-      // Return empty string instead of original URL
-      return '';
-    }
+
+      request.on('error', (err) => {
+        console.error(`Error downloading from ${imageUrl}:`, err);
+        reject(err);
+      });
+
+      request.setTimeout(10000, () => {
+        request.destroy();
+        reject(new Error('Download timeout'));
+      });
+    });
   } catch (error) {
     console.error('Error in downloadAndSaveImage:', error);
-    // Return empty string instead of original URL to avoid broken external links
-    return '';
+    // If download fails, return original URL
+    return imageUrl;
   }
 }
 
 export async function createRecipe(req: Request, res: Response) {
   try {
-    const { title, description, ingredients, instructions, imageUrl, tags, cookTime, difficulty, timeReasoning, difficultyReasoning, sourceUrl } = req.body;
+    const { title, description, ingredients, instructions, imageUrl, tags, cookTime, difficulty, timeReasoning, difficultyReasoning } = req.body;
     
     // Debug: Log the entire OIDC object
     console.log('OIDC object:', JSON.stringify((req as any).oidc, null, 2));
@@ -218,7 +194,6 @@ export async function createRecipe(req: Request, res: Response) {
         title,
         description,
         imageUrl: localImageUrl,
-        sourceUrl: sourceUrl || null, // Save original URL if imported
         userId: dbUser.id,
         estimatedTime: cookTime, // Map cookTime to estimatedTime for database compatibility
         difficulty,
