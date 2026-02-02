@@ -526,10 +526,14 @@ export async function chat(req: Request, res: Response) {
       return res.status(400).json({ error: 'Question is required' });
     }
     
-    // Call AI service for chat
+    // Call AI service for chat (AI returns { response }; frontend expects { answer, recipes })
     const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
     const response = await axios.post(`${aiServiceUrl}/recipe/chat`, { question });
-    res.status(200).json(response.data);
+    const data = response.data as { response?: string; answer?: string; recipes?: unknown[] };
+    res.status(200).json({
+      answer: data.answer ?? data.response ?? '',
+      recipes: data.recipes ?? [],
+    });
   } catch (err: unknown) {
     if (err && typeof err === 'object' && 'response' in err) {
       const axiosError = err as any;

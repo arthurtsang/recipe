@@ -76,6 +76,11 @@ async function main() {
     }
     if (meRes.status !== 200) {
       console.error(`\nUnexpected /api/me status: ${meRes.status}`);
+      if (meRes.data && typeof meRes.data === 'object' && meRes.data !== null) {
+        console.error('Response body:', JSON.stringify(meRes.data, null, 2));
+      } else if (meRes.data != null) {
+        console.error('Response body:', meRes.data);
+      }
       await prisma.$disconnect();
       process.exit(1);
     }

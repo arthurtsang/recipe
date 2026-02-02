@@ -142,43 +142,57 @@ const requiresAdmin = () => {
 };
 
 // Resolve Bearer token so /api/me and other routes accept API-token auth (e.g. save-mabels-imports.ts)
-app.use(async (req: any, res, next) => {
+app.use((req: any, res, next) => {
   if (req.oidc?.user?.email) return next();
   const authHeader = req.headers.authorization;
-  if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.slice(7).trim();
-    if (token) {
-      const user = await prisma.user.findFirst({
-        where: { apiToken: token, isEnabled: true },
-        select: { id: true, email: true },
-      });
-      if (user) {
-        req.oidc = { user: { email: user.email, id: user.id } };
-      }
-    }
+  if (!authHeader || typeof authHeader !== 'string' || !authHeader.startsWith('Bearer ')) {
+    return next();
   }
-  next();
+  const token = authHeader.slice(7).trim();
+  if (!token) return next();
+  prisma.user
+    .findFirst({
+      where: { apiToken: token, isEnabled: true },
+      select: { id: true, email: true },
+    })
+    .then((user) => {
+      if (user) {
+        req.oidc = {
+          user: { email: user.email, id: user.id },
+          isAuthenticated: () => true,
+        };
+      }
+      next();
+    })
+    .catch((err) => {
+      console.error('Bearer token lookup failed:', err);
+      next(err);
+    });
 });
 
 // Endpoint to get current user info
 app.get('/api/me', requiresAuth(), async (req: any, res) => {
-  // Debug: Log the entire OIDC object for comparison
-  console.log('/api/me OIDC object after requiresAuth:', JSON.stringify(req.oidc, null, 2));
-  
-  const email = req.oidc.user?.email?.toLowerCase();
-  if (!email) return res.status(401).json({ error: 'No email' });
-  const dbUser = await userService.getUserByEmail(email);
-  if (!dbUser) return res.status(404).json({ error: 'User not found' });
-  
-  const isAdmin = email === process.env.ADMIN_EMAIL?.toLowerCase();
-  
-  res.json({
-    ...dbUser,
-    picture: req.oidc.user.picture,
-    name: req.oidc.user.name,
-    isAdmin,
-    isEnabled: dbUser.isEnabled,
-  });
+  try {
+    const email = req.oidc?.user?.email?.toLowerCase();
+    if (!email) return res.status(401).json({ error: 'No email' });
+    const dbUser = await userService.getUserByEmail(email);
+    if (!dbUser) return res.status(404).json({ error: 'User not found' });
+
+    const isAdmin = email === process.env.ADMIN_EMAIL?.toLowerCase();
+    const picture = req.oidc?.user?.picture ?? dbUser.picture ?? undefined;
+    const name = req.oidc?.user?.name ?? dbUser.name ?? undefined;
+
+    res.json({
+      ...dbUser,
+      picture,
+      name,
+      isAdmin,
+      isEnabled: dbUser.isEnabled,
+    });
+  } catch (err) {
+    console.error('/api/me error:', err);
+    res.status(500).json({ error: 'Failed to get user info' });
+  }
 });
 
 // Admin endpoints
@@ -381,6 +395,13 @@ app.use('/api', (req, res) => {
 // For any route not handled by your API, serve index.html (for React Router)
 app.get(/^\/(?!api|uploads|auth|static).*/, (req, res) => {
   res.sendFile(path.join(__dirname, '../../web/dist', 'index.html'));
+});
+
+// Error handler (e.g. Bearer middleware calls next(err))
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('Express error handler:', err?.message ?? err);
+  if (res.headersSent) return;
+  res.status(500).json({ error: err?.message ?? 'Internal server error' });
 });
 
 // Start background schedulers
