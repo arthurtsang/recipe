@@ -31,6 +31,7 @@ interface Recipe {
   sourceUrl?: string;
   estimatedTime?: string;
   difficulty?: string;
+  currentVersionId?: string | null;
   user: { id: string; name?: string; email: string };
   versions: Version[];
 }
@@ -65,9 +66,17 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       })
       .then(data => {
         setRecipe(data);
-        setSelectedVersionIdx(0);
-        if (data.versions && data.versions.length > 0) {
-          setEditFields({ ...data.versions[0], title: data.title, description: data.description, imageUrl: data.imageUrl });
+        const versions = Array.isArray(data.versions) ? data.versions : [];
+        let idx = 0;
+        if (data.currentVersionId && versions.length > 0) {
+          const currentIdx = versions.findIndex((v: any) => v.id === data.currentVersionId);
+          if (currentIdx >= 0) idx = currentIdx;
+          else idx = versions.length - 1;
+        }
+        setSelectedVersionIdx(idx);
+        if (versions.length > 0) {
+          const v = versions[idx];
+          setEditFields({ ...v, title: data.title, description: data.description, imageUrl: data.imageUrl });
         }
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
@@ -88,7 +97,11 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   const handleBack = () => navigate(-1);
 
   const isOwner = user && recipe && recipe.user && user.id === recipe.user.id;
-  const versions = recipe?.versions || [];
+  const versions = (recipe?.versions || []).slice().sort((a, b) => {
+    const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return ta - tb;
+  });
   const selectedVersion = versions[selectedVersionIdx] || {};
 
   // Handle version selection
@@ -156,13 +169,16 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       const versions = Array.isArray(data.versions) ? data.versions : [];
       setRecipe({ ...data, versions });
 
-      // Find the new/updated version index
+      // Find the version to show: after "Save as new version" show the new one (currentVersionId); else show the one we edited
       let newIdx = 0;
-      if (!createNewVersion && selectedVersion.id && versions.length > 0) {
+      if (createNewVersion && versions.length > 0 && data.currentVersionId) {
+        const idx = versions.findIndex((v: any) => v.id === data.currentVersionId);
+        newIdx = idx >= 0 ? idx : versions.length - 1;
+      } else if (!createNewVersion && selectedVersion.id && versions.length > 0) {
         newIdx = versions.findIndex((v: any) => v.id === selectedVersion.id);
         if (newIdx === -1) newIdx = 0;
-      } else if (createNewVersion && versions.length > 0) {
-        newIdx = 0;
+      } else if (versions.length > 0) {
+        newIdx = versions.length - 1;
       }
       newIdx = Math.min(newIdx, Math.max(0, versions.length - 1));
 

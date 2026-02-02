@@ -100,11 +100,9 @@ export async function downloadAndSaveImage(imageUrl: string): Promise<string> {
     const pathMatch = url.pathname.match(/^\/(?:api\/)?uploads\/(.+)$/);
     if (pathMatch && (url.hostname === 'localhost' || url.hostname === '127.0.0.1')) {
       const relativePath = pathMatch[1];
-      const localPath = path.join(process.cwd(), 'uploads', relativePath);
-      if (fs.existsSync(localPath)) {
-        return `/uploads/${relativePath}`;
-      }
-      // File missing; fall through to download (use http for localhost to avoid SSL error)
+      // Never download from localhost — backend serves HTTP, so https would cause SSL error.
+      // Return the local path as-is (same image URL); if file is missing, recipe keeps the path.
+      return `/uploads/${relativePath}`;
     }
 
     const fileExt = url.pathname.split('.').pop()?.toLowerCase() || 'jpg';
@@ -253,8 +251,8 @@ export async function createRecipe(req: Request, res: Response) {
 export async function updateRecipe(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const { title, description, ingredients, instructions, imageUrl, tags, cookTime, difficulty } = req.body;
-    
+    const { title, description, ingredients, instructions, imageUrl, tags, cookTime, difficulty, createNewVersion, versionName } = req.body;
+
     // Use the same authentication pattern as rateRecipe and createRecipe
     if (!req.oidc?.user?.email) return res.status(401).json({ error: 'Not authenticated' });
     const dbUser = await prisma.user.findUnique({ where: { email: req.oidc.user.email.toLowerCase() } });
@@ -277,42 +275,68 @@ export async function updateRecipe(req: Request, res: Response) {
     }
 
     // Download external image if provided and different from current
-    const localImageUrl = imageUrl && imageUrl !== existingRecipe.imageUrl 
-      ? await downloadAndSaveImage(imageUrl) 
+    const localImageUrl = imageUrl && imageUrl !== existingRecipe.imageUrl
+      ? await downloadAndSaveImage(imageUrl)
       : imageUrl;
 
-    // Update the recipe
-    const updatedRecipe = await prisma.recipe.update({
-      where: { id: id },
-      data: {
-        title,
-        description,
-        imageUrl: localImageUrl,
-        estimatedTime: cookTime, // Map cookTime to estimatedTime for database compatibility
-        difficulty,
-      },
-    });
-
-    // Update the current version
-    if (existingRecipe.currentVersionId) {
-      await prisma.recipeVersion.update({
-        where: { id: existingRecipe.currentVersionId },
+    if (createNewVersion === true) {
+      // Create a new RecipeVersion and set it as current (so "Save as new version" shows up in version list)
+      await prisma.$transaction(async (tx) => {
+        const newVersion = await tx.recipeVersion.create({
+          data: {
+            recipeId: id,
+            title: title ?? existingRecipe.title,
+            description: description ?? existingRecipe.description ?? '',
+            ingredients: ingredients ?? existingRecipe.currentVersion?.ingredients ?? '',
+            instructions: instructions ?? existingRecipe.currentVersion?.instructions ?? '',
+            imageUrl: localImageUrl ?? existingRecipe.currentVersion?.imageUrl ?? null,
+            name: typeof versionName === 'string' ? versionName : null,
+          },
+        });
+        await tx.recipe.update({
+          where: { id },
+          data: {
+            title: title ?? existingRecipe.title,
+            description: description ?? existingRecipe.description ?? null,
+            imageUrl: localImageUrl ?? existingRecipe.imageUrl ?? null,
+            estimatedTime: cookTime ?? existingRecipe.estimatedTime ?? null,
+            difficulty: difficulty ?? existingRecipe.difficulty ?? null,
+            currentVersionId: newVersion.id,
+          },
+        });
+      });
+    } else {
+      // Update recipe and current version in place
+      await prisma.recipe.update({
+        where: { id },
         data: {
           title,
-          description: description || '',
-          ingredients: ingredients || '',
-          instructions: instructions || '',
+          description,
           imageUrl: localImageUrl,
+          estimatedTime: cookTime,
+          difficulty,
         },
       });
+      if (existingRecipe.currentVersionId) {
+        await prisma.recipeVersion.update({
+          where: { id: existingRecipe.currentVersionId },
+          data: {
+            title,
+            description: description || '',
+            ingredients: ingredients || '',
+            instructions: instructions || '',
+            imageUrl: localImageUrl,
+          },
+        });
+      }
     }
 
     // Return the updated recipe with versions (same shape as GET so frontend does not crash)
     const recipe = await prisma.recipe.findUnique({
-      where: { id: id },
+      where: { id },
       include: {
         user: true,
-        versions: true,
+        versions: { orderBy: { createdAt: 'asc' } },
       },
     });
 
@@ -373,8 +397,11 @@ export async function deleteRecipeVersion(req: Request, res: Response) {
       if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
     }
     await prisma.recipeVersion.delete({ where: { id: versionId } });
-    // Return the updated recipe with all versions
-    const recipe = await prisma.recipe.findUnique({ where: { id }, include: { versions: true } });
+    // Return the updated recipe with all versions (creation order)
+    const recipe = await prisma.recipe.findUnique({
+      where: { id },
+      include: { versions: { orderBy: { createdAt: 'asc' } } },
+    });
     res.json(recipe);
   } catch (err) {
     console.error(err);

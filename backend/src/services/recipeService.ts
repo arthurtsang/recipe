@@ -60,7 +60,7 @@ export async function getRecipeById(id: string) {
     where: { id, isPublic: true },
     include: {
       user: { select: { id: true, name: true, email: true } },
-      versions: true,
+      versions: { orderBy: { createdAt: 'asc' } },
       ratings: true,
       comments: true,
       tags: { include: { tag: true } },
