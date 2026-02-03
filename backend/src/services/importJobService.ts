@@ -1,5 +1,10 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../index';
 import axios from 'axios';
+
+function isP2025(e: unknown): boolean {
+  return e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025';
+}
 
 export type AiImportKind = 'url' | 'video';
 
@@ -54,34 +59,58 @@ export async function updateImportJobStatus(
   result?: any,
   error?: string,
   timestamps?: { startedAt?: Date; completedAt?: Date }
-): Promise<ImportJobData> {
+): Promise<ImportJobData | null> {
   const data: any = { status, result, error, updatedAt: new Date() };
   if (timestamps?.startedAt != null) data.startedAt = timestamps.startedAt;
   if (timestamps?.completedAt != null) data.completedAt = timestamps.completedAt;
-  return prisma.importJob.update({
-    where: { id },
-    data,
-  });
+  try {
+    return await prisma.importJob.update({
+      where: { id },
+      data,
+    });
+  } catch (e) {
+    if (isP2025(e)) {
+      console.warn(`[IMPORT] updateImportJobStatus: job ${id} not found (P2025), may have been deleted`);
+      return null;
+    }
+    throw e;
+  }
 }
 
 export async function updateImportJobSavedRecipe(
   id: string,
   savedRecipeId: string
-): Promise<ImportJobData> {
-  return prisma.importJob.update({
-    where: { id },
-    data: {
-      savedRecipeId,
-      updatedAt: new Date(),
-    },
-  });
+): Promise<ImportJobData | null> {
+  try {
+    return await prisma.importJob.update({
+      where: { id },
+      data: {
+        savedRecipeId,
+        updatedAt: new Date(),
+      },
+    });
+  } catch (e) {
+    if (isP2025(e)) {
+      console.warn(`[IMPORT] updateImportJobSavedRecipe: job ${id} not found (P2025), may have been deleted`);
+      return null;
+    }
+    throw e;
+  }
 }
 
 export async function updateImportJobAiJobId(id: string, aiImportJobId: string, aiImportKind?: AiImportKind): Promise<void> {
-  await prisma.importJob.update({
-    where: { id },
-    data: { aiImportJobId, aiImportKind: aiImportKind ?? undefined, updatedAt: new Date() },
-  });
+  try {
+    await prisma.importJob.update({
+      where: { id },
+      data: { aiImportJobId, aiImportKind: aiImportKind ?? undefined, updatedAt: new Date() },
+    });
+  } catch (e) {
+    if (isP2025(e)) {
+      console.warn(`[IMPORT] updateImportJobAiJobId: job ${id} not found (P2025), may have been deleted`);
+      return;
+    }
+    throw e;
+  }
 }
 
 const POLL_INTERVAL_MS = 30000;   // How often we call AI status API (30 s)
@@ -446,11 +475,16 @@ export async function resetProcessingJobsOnStartup(): Promise<void> {
 
   for (const job of processing) {
     if (!job.aiImportJobId) {
-      await prisma.importJob.update({
-        where: { id: job.id },
-        data: { status: 'pending', error: null, startedAt: null, completedAt: null, aiImportJobId: null, aiImportKind: null, updatedAt: new Date() },
-      });
-      resetCount++;
+      try {
+        await prisma.importJob.update({
+          where: { id: job.id },
+          data: { status: 'pending', error: null, startedAt: null, completedAt: null, aiImportJobId: null, aiImportKind: null, updatedAt: new Date() },
+        });
+        resetCount++;
+      } catch (e) {
+        if (isP2025(e)) continue;
+        throw e;
+      }
       continue;
     }
     const kind: AiImportKind = (job.aiImportKind as AiImportKind) ?? 'url';
@@ -472,11 +506,16 @@ export async function resetProcessingJobsOnStartup(): Promise<void> {
       }
     } catch (e: any) {
       if (axios.isAxiosError(e) && e.response?.status === 404) {
-        await prisma.importJob.update({
-          where: { id: job.id },
-          data: { status: 'pending', error: null, startedAt: null, completedAt: null, aiImportJobId: null, aiImportKind: null, updatedAt: new Date() },
-        });
-        resetCount++;
+        try {
+          await prisma.importJob.update({
+            where: { id: job.id },
+            data: { status: 'pending', error: null, startedAt: null, completedAt: null, aiImportJobId: null, aiImportKind: null, updatedAt: new Date() },
+          });
+          resetCount++;
+        } catch (updateErr) {
+          if (isP2025(updateErr)) continue;
+          throw updateErr;
+        }
       } else {
         // Leave in processing; status poll will retry or we can reset to pending after stuck timeout
       }

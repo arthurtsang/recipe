@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Paper, Typography, Box, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemButton, ListItemText, Checkbox, FormControlLabel, Rating, Alert, Slide, Link } from '@mui/material';
+import { Paper, Typography, Box, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemButton, ListItemText, Checkbox, FormControlLabel, Rating, Alert, Slide, Link, CircularProgress } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import EditIcon from '@mui/icons-material/Edit';
+import SaveIcon from '@mui/icons-material/Save';
+import DeleteIcon from '@mui/icons-material/Delete';
+import ReplayIcon from '@mui/icons-material/Replay';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
@@ -58,6 +62,8 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   const [originalFields, setOriginalFields] = useState<Version | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [reimporting, setReimporting] = useState(false);
+  const [reimportNotification, setReimportNotification] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -306,6 +312,30 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
         setAverageRating(data.average);
         setUserRating(data.user);
       });
+  };
+
+  // Reimport from source URL (creates new import job; save from Import History to add new version)
+  const handleReimport = async () => {
+    if (!recipe?.sourceUrl?.trim()) return;
+    setReimporting(true);
+    setReimportNotification(null);
+    try {
+      const response = await fetch('/api/imports/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ urls: [recipe.sourceUrl!.trim()] }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to start reimport');
+      }
+      setReimportNotification('Reimport started. Open Import History to see the job; when it completes, save to add a new version.');
+    } catch (err) {
+      setReimportNotification(err instanceof Error ? err.message : 'Failed to start reimport');
+    } finally {
+      setReimporting(false);
+    }
   };
 
   // Delete selected version or whole recipe
@@ -611,17 +641,36 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       )}
       {/* Owner controls */}
       {isOwner && (
-        <Box mt={3} display="flex" gap={2}>
-          {!isEditing ? (
-            <Button variant="contained" color="primary" onClick={handleEdit}>
-              {t('edit', 'Edit')}
-            </Button>
-          ) : (
-            <Button variant="contained" color="primary" onClick={handleOpenSaveDialog}>
-              {t('save', 'Save')}
-            </Button>
+        <Box mt={3}>
+          {reimportNotification && (
+            <Alert severity={reimportNotification.startsWith('Reimport started') ? 'success' : 'error'} sx={{ mb: 2 }} onClose={() => setReimportNotification(null)}>
+              {reimportNotification}
+            </Alert>
           )}
-          <Button variant="outlined" color="error" onClick={() => setDeleteDialogOpen(true)} disabled={deleting}>{t('delete')}</Button>
+          <Box display="flex" gap={2} flexWrap="wrap">
+            {!isEditing ? (
+              <Button variant="contained" color="primary" onClick={handleEdit} startIcon={<EditIcon />}>
+                {t('edit', 'Edit')}
+              </Button>
+            ) : (
+              <Button variant="contained" color="primary" onClick={handleOpenSaveDialog} startIcon={<SaveIcon />}>
+                {t('save', 'Save')}
+              </Button>
+            )}
+            {recipe?.sourceUrl && (
+              <Button
+                variant="outlined"
+                size="medium"
+                onClick={handleReimport}
+                disabled={reimporting}
+                startIcon={reimporting ? <CircularProgress size={16} /> : <ReplayIcon />}
+                title="Reimport from original URL. When the job completes, save from Import History to add a new version."
+              >
+                {reimporting ? 'Starting…' : t('reimport', 'Reimport')}
+              </Button>
+            )}
+            <Button variant="outlined" color="error" onClick={() => setDeleteDialogOpen(true)} disabled={deleting} startIcon={<DeleteIcon />}>{t('delete')}</Button>
+          </Box>
         </Box>
       )}
       {/* Save Dialog */}

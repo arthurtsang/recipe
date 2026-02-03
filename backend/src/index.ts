@@ -286,10 +286,15 @@ app.post('/api/admin/import-jobs/:id/retry', requiresAuth(), requiresAdmin(), as
     const { id } = req.params;
     const job = await prisma.importJob.findUnique({ where: { id } });
     if (!job) return res.status(404).json({ error: 'Import job not found' });
-    await prisma.importJob.update({
-      where: { id },
-      data: { status: 'pending', error: null, result: null, startedAt: null, completedAt: null, savedRecipeId: null, aiImportJobId: null, updatedAt: new Date() },
-    });
+    try {
+      await prisma.importJob.update({
+        where: { id },
+        data: { status: 'pending', error: null, result: null, startedAt: null, completedAt: null, savedRecipeId: null, aiImportJobId: null, updatedAt: new Date() },
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2025') return res.status(404).json({ error: 'Import job not found' });
+      throw e;
+    }
     startImportJobOnly(id).catch((err) => console.error(`[IMPORT] Admin retry job ${id}:`, err));
     res.json({ message: 'Job queued for retry', jobId: id });
   } catch (error) {

@@ -21,7 +21,7 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import { Close as CloseIcon, Refresh as RefreshIcon, Delete as DeleteIcon, OpenInNew as OpenInNewIcon } from '@mui/icons-material';
+import { Close as CloseIcon, Refresh as RefreshIcon, Delete as DeleteIcon, OpenInNew as OpenInNewIcon, Replay as ReplayIcon } from '@mui/icons-material';
 
 import { useNavigate } from 'react-router-dom';
 
@@ -50,7 +50,9 @@ const ImportHistory: React.FC<ImportHistoryProps> = ({ open, onClose }) => {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [reimporting, setReimporting] = useState<string | null>(null);
   const [expandedResponseId, setExpandedResponseId] = useState<string | null>(null);
+  const [notification, setNotification] = useState<string | null>(null);
 
   const fetchImports = async () => {
     setLoading(true);
@@ -109,6 +111,30 @@ const ImportHistory: React.FC<ImportHistoryProps> = ({ open, onClose }) => {
       setError(err instanceof Error ? err.message : 'Failed to save recipe');
     } finally {
       setSaving(null);
+    }
+  };
+
+  const handleReimport = async (job: ImportJob) => {
+    if (!job.url?.trim()) return;
+    setReimporting(job.id);
+    setError(null);
+    try {
+      const response = await fetch('/api/imports/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ urls: [job.url.trim()] }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to start reimport');
+      }
+      setNotification('Reimport started. Refresh the list to see the new job. When it completes, save to add a new version to the same recipe.');
+      fetchImports();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start reimport');
+    } finally {
+      setReimporting(null);
     }
   };
 
@@ -172,8 +198,13 @@ const ImportHistory: React.FC<ImportHistoryProps> = ({ open, onClose }) => {
       
       <DialogContent>
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
             {error}
+          </Alert>
+        )}
+        {notification && (
+          <Alert severity="info" sx={{ mb: 2 }} onClose={() => setNotification(null)}>
+            {notification}
           </Alert>
         )}
 
@@ -241,7 +272,19 @@ const ImportHistory: React.FC<ImportHistoryProps> = ({ open, onClose }) => {
                 />
                 
                 <ListItemSecondaryAction>
-                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {!job.savedRecipeId && (
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => handleReimport(job)}
+                        disabled={reimporting === job.id || !job.url?.trim()}
+                        startIcon={reimporting === job.id ? <CircularProgress size={16} /> : <ReplayIcon />}
+                        title="Run import again (same URL). When you save, a new version is added to the same recipe if it already exists."
+                      >
+                        {reimporting === job.id ? 'Starting…' : 'Reimport'}
+                      </Button>
+                    )}
                     {job.status === 'completed' && job.result && !job.savedRecipeId && (
                       <Button
                         variant="contained"

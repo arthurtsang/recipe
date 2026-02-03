@@ -48,70 +48,36 @@ export async function startImport(req: Request, res: Response) {
     console.log('[IMPORT] Request body type:', typeof req.body);
     console.log('[IMPORT] Request body keys:', Object.keys(req.body || {}));
     
-    const { url, urls } = req.body || {};
-    
-    console.log('[IMPORT] Extracted url:', url);
-    console.log('[IMPORT] Extracted urls:', urls);
-    console.log('[IMPORT] urls is array?', Array.isArray(urls));
-    
-    // Support both single URL and array of URLs
-    let urlList: string[] = [];
-    if (urls && Array.isArray(urls) && urls.length > 0) {
-      urlList = urls.filter((u: any) => u && typeof u === 'string' && u.trim()).map((u: string) => u.trim());
-      console.log('[IMPORT] Using urls array, filtered to:', urlList);
-    } else if (url && typeof url === 'string' && url.trim()) {
-      urlList = [url.trim()];
-      console.log('[IMPORT] Using single url:', urlList);
-    } else {
-      console.log('[IMPORT] ERROR: No valid url or urls found in request body');
-      console.log('[IMPORT] req.body:', req.body);
-      return res.status(400).json({ error: 'URL or URLs array is required' });
-    }
+    // Single endpoint: body is { urls: string[] }. One URL = [url].
+    const raw = req.body?.urls ?? req.body?.url;
+    const urlList: string[] = Array.isArray(raw)
+      ? raw.filter((u: unknown) => typeof u === 'string' && (u as string).trim()).map((u: string) => (u as string).trim())
+      : typeof raw === 'string' && raw.trim()
+        ? [raw.trim()]
+        : [];
 
     if (urlList.length === 0) {
-      return res.status(400).json({ error: 'At least one valid URL is required' });
+      return res.status(400).json({ error: 'Request body must include urls (array of URLs). Example: { "urls": ["https://..."] }' });
     }
 
-    // Create import jobs for all URLs
     const jobs = await Promise.all(
-      urlList.map((url) => createImportJob(dbUser.id, url.trim()))
+      urlList.map((url) => createImportJob(dbUser.id, url))
     );
 
-    // Process jobs with a delay between them to avoid overwhelming the system
-    // Process first 3 immediately, then queue the rest with delays
     jobs.slice(0, 3).forEach((job) => {
-      processImportJob(job.id).catch(error => {
-        console.error(`Background import job ${job.id} failed:`, error);
-      });
+      processImportJob(job.id).catch((err) => console.error(`[IMPORT] Job ${job.id} failed:`, err));
     });
-    
-    // Queue remaining jobs with delays
     jobs.slice(3).forEach((job, index) => {
       setTimeout(() => {
-        processImportJob(job.id).catch(error => {
-          console.error(`Background import job ${job.id} failed:`, error);
-        });
-      }, (index + 1) * 5000); // 5 second delay between each job
+        processImportJob(job.id).catch((err) => console.error(`[IMPORT] Job ${job.id} failed:`, err));
+      }, (index + 1) * 5000);
     });
 
-    // Return array of job IDs if multiple, single job if one
-    if (jobs.length === 1) {
-      res.json({ 
-        jobId: jobs[0].id, 
-        status: jobs[0].status,
-        message: 'Import job started successfully' 
-      });
-    } else {
-      res.json({ 
-        jobIds: jobs.map(j => j.id),
-        jobs: jobs.map(j => ({
-          jobId: j.id,
-          url: j.url,
-          status: j.status
-        })),
-        message: `${jobs.length} import jobs started successfully` 
-      });
-    }
+    res.json({
+      jobIds: jobs.map((j) => j.id),
+      jobs: jobs.map((j) => ({ jobId: j.id, url: j.url, status: j.status })),
+      message: jobs.length === 1 ? 'Import job started' : `${jobs.length} import jobs started`,
+    });
 
   } catch (error) {
     console.error('Error starting import:', error);
@@ -402,6 +368,9 @@ export async function updateImportJobRecipe(req: Request, res: Response) {
     }
 
     const updatedJob = await updateImportJobSavedRecipe(jobId, savedRecipeId);
+    if (!updatedJob) {
+      return res.status(404).json({ error: 'Import job not found' });
+    }
 
     res.json({
       id: updatedJob.id,

@@ -19,7 +19,6 @@ router.post('/:id/ratings', requiresAuth(), requiresEnabledUser(), recipeControl
 router.post('/search', recipeController.searchRecipes);
 router.post('/set-alias', requiresAuth(), requiresEnabledUser(), recipeController.setAlias);
 router.get('/user/:alias', recipeController.getRecipesByAlias);
-router.post('/import', requiresAuth(), requiresEnabledUser(), recipeController.importRecipe);
 router.post('/auto-category', requiresAuth(), requiresEnabledUser(), recipeController.autoCategory);
 router.post('/chat', requiresAuth(), requiresEnabledUser(), recipeController.chat);
 

@@ -3,6 +3,7 @@
   "login": "登入",
   "logout": "登出",
   "recipes": "食譜",
+  "recipesSubtitle": "探索社群分享的美味食譜。搜尋、瀏覽，找到你的下一道最愛。",
   "searchPlaceholder": "搜尋食譜...",
   "addRecipe": "新增食譜",
   "editRecipe": "編輯食譜",

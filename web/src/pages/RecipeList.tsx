@@ -116,7 +116,7 @@ export default function RecipeList() {
             color="text.secondary"
             sx={{ mb: 4, maxWidth: 600, mx: 'auto' }}
           >
-            Discover delicious recipes from our community. Search, explore, and find your next favorite dish.
+            {t('recipesSubtitle')}
           </Typography>
         </Box>
         

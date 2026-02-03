@@ -3,6 +3,7 @@
   "login": "Login",
   "logout": "Logout",
   "recipes": "Recipes",
+  "recipesSubtitle": "Discover delicious recipes from our community. Search, explore, and find your next favorite dish.",
   "searchPlaceholder": "Search recipes...",
   "addRecipe": "Add Recipe",
   "editRecipe": "Edit Recipe",
