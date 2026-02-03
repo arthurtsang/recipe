@@ -222,15 +222,18 @@ const ImportHistory: React.FC<ImportHistoryProps> = ({ open, onClose }) => {
               <ListItem key={job.id} divider>
                 <ListItemText
                   primary={
-                    <Box display="flex" alignItems="center" gap={1}>
+                    <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
                       <Typography variant="subtitle1">
                         {job.result?.title || truncateUrl(job.url)}
                       </Typography>
                       <Chip
-                        label={job.status}
+                        label={job.status === 'completed' ? 'imported' : job.status}
                         color={getStatusColor(job.status) as any}
                         size="small"
                       />
+                      {job.savedRecipeId && (
+                        <Chip label="saved" color="success" size="small" />
+                      )}
                     </Box>
                   }
                   secondary={
@@ -248,25 +251,27 @@ const ImportHistory: React.FC<ImportHistoryProps> = ({ open, onClose }) => {
                           Error: {job.error.length > 120 ? job.error.slice(0, 120) + '…' : job.error}
                         </Typography>
                       )}
-                      <Button
-                        size="small"
-                        startIcon={expandedResponseId === job.id ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                        onClick={() => setExpandedResponseId(expandedResponseId === job.id ? null : job.id)}
-                        sx={{ mt: 0.5, textTransform: 'none' }}
-                      >
-                        {expandedResponseId === job.id ? 'Hide' : 'Show'} AI service response
-                      </Button>
-                      <Collapse in={expandedResponseId === job.id}>
-                        <Paper variant="outlined" sx={{ p: 1.5, mt: 1, bgcolor: 'grey.50', maxHeight: 220, overflow: 'auto' }}>
-                          <Typography component="pre" variant="caption" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                            {job.status === 'failed' && job.error
-                              ? job.error
-                              : job.result != null
-                                ? JSON.stringify(job.result, null, 2)
-                                : 'No response data'}
-                          </Typography>
-                        </Paper>
-                      </Collapse>
+                      <Box sx={{ mt: 1 }}>
+                        <Button
+                          size="small"
+                          startIcon={expandedResponseId === job.id ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                          onClick={() => setExpandedResponseId(expandedResponseId === job.id ? null : job.id)}
+                          sx={{ textTransform: 'none' }}
+                        >
+                          {expandedResponseId === job.id ? 'Hide' : 'Show'} AI service response
+                        </Button>
+                        <Collapse in={expandedResponseId === job.id}>
+                          <Paper variant="outlined" sx={{ p: 1.5, mt: 1, bgcolor: 'grey.50', maxHeight: 220, overflow: 'auto' }}>
+                            <Typography component="pre" variant="caption" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                              {job.status === 'failed' && job.error
+                                ? job.error
+                                : job.result != null
+                                  ? JSON.stringify(job.result, null, 2)
+                                  : 'No response data'}
+                            </Typography>
+                          </Paper>
+                        </Collapse>
+                      </Box>
                     </Box>
                   }
                 />
@@ -297,26 +302,23 @@ const ImportHistory: React.FC<ImportHistoryProps> = ({ open, onClose }) => {
                       </Button>
                     )}
                     {job.status === 'completed' && job.result && job.savedRecipeId && (
-                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                        <Chip label="Imported" color="success" size="small" />
-                        <Link
-                          href={`/recipes/${job.savedRecipeId}`}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            navigate(`/recipes/${job.savedRecipeId}`);
-                          }}
-                          sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: 0.5,
-                            textDecoration: 'none',
-                            fontSize: '0.875rem'
-                          }}
-                        >
-                          <OpenInNewIcon fontSize="small" />
-                          Open Recipe
-                        </Link>
-                      </Box>
+                      <Link
+                        href={`/recipes/${job.savedRecipeId}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          navigate(`/recipes/${job.savedRecipeId}`);
+                        }}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 0.5,
+                          textDecoration: 'none',
+                          fontSize: '0.875rem'
+                        }}
+                      >
+                        <OpenInNewIcon fontSize="small" />
+                        Open Recipe
+                      </Link>
                     )}
                     <IconButton
                       size="small"
