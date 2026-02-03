@@ -109,6 +109,7 @@ model ImportJob {
   error          String?   // Error message if failed
   savedRecipeId  String?   // ID of the recipe if it was saved from this import
   aiImportJobId  String?   // AI service job ID when async; used to resume polling after restart
+  aiImportKind   String?   // 'url' | 'video' – which AI endpoint to poll; null = url (backward compat)
   createdAt      DateTime  @default(now())   // When job was queued
   updatedAt      DateTime  @updatedAt
   startedAt      DateTime? // When status changed to processing

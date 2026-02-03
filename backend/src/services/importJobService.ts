@@ -1,6 +1,8 @@
 import { prisma } from '../index';
 import axios from 'axios';
 
+export type AiImportKind = 'url' | 'video';
+
 export interface ImportJobData {
   id: string;
   userId: string;
@@ -9,6 +11,7 @@ export interface ImportJobData {
   result?: any;
   error?: string;
   aiImportJobId?: string | null;
+  aiImportKind?: string | null;
   createdAt: Date;
   updatedAt: Date;
   startedAt?: Date | null;
@@ -74,10 +77,10 @@ export async function updateImportJobSavedRecipe(
   });
 }
 
-export async function updateImportJobAiJobId(id: string, aiImportJobId: string): Promise<void> {
+export async function updateImportJobAiJobId(id: string, aiImportJobId: string, aiImportKind?: AiImportKind): Promise<void> {
   await prisma.importJob.update({
     where: { id },
-    data: { aiImportJobId, updatedAt: new Date() },
+    data: { aiImportJobId, aiImportKind: aiImportKind ?? undefined, updatedAt: new Date() },
   });
 }
 
@@ -102,16 +105,36 @@ function assertNotMockResult(result: any): void {
   }
 }
 
+/** True if URL is a video site we import via /recipe/import-video (YouTube, Instagram, TikTok, etc.). */
+function isVideoImportUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    const videoHosts = [
+      'youtube.com', 'www.youtube.com', 'youtu.be', 'm.youtube.com',
+      'instagram.com', 'www.instagram.com',
+      'tiktok.com', 'www.tiktok.com', 'vm.tiktok.com',
+      'facebook.com', 'www.facebook.com', 'fb.watch', 'fb.com',
+      'twitter.com', 'www.twitter.com', 'x.com', 'www.x.com',
+      'vimeo.com', 'www.vimeo.com',
+      'dailymotion.com', 'www.dailymotion.com',
+    ];
+    return videoHosts.some((h) => host === h || host.endsWith('.' + h));
+  } catch {
+    return false;
+  }
+}
+
 /** Poll AI service for import job status until completed/failed or timeout. Returns result or throws. */
-async function pollAiImportResult(aiJobId: string): Promise<any> {
+async function pollAiImportResult(aiJobId: string, kind: AiImportKind): Promise<any> {
   const aiServiceUrl = (process.env.AI_SERVICE_URL || 'http://localhost:8001').replace(/\/$/, '');
+  const statusPath = kind === 'video' ? 'recipe/import-video/status' : 'recipe/import/status';
   const started = Date.now();
   let result: any = null;
   let failedError: string | null = null;
 
   while (Date.now() - started < MAX_IMPORT_WAIT_MS) {
     const statusRes = await axios.get<{ status: string; result?: any; error?: string }>(
-      `${aiServiceUrl}/import-recipe/status/${aiJobId}`,
+      `${aiServiceUrl}/${statusPath}/${aiJobId}`,
       { timeout: AI_STATUS_REQUEST_TIMEOUT_MS }
     );
     const { status } = statusRes.data;
@@ -132,13 +155,15 @@ async function pollAiImportResult(aiJobId: string): Promise<any> {
   return result;
 }
 
-/** Start AI import: POST and return aiJobId (async) or result (sync). Throws on error. */
-async function startAiImport(url: string): Promise<{ aiJobId?: string; result?: any }> {
+/** Start AI import: POST and return aiJobId (async) or result (sync). Uses /recipe/import-video for video URLs. Throws on error. */
+async function startAiImport(url: string): Promise<{ aiJobId?: string; result?: any; isVideo?: boolean }> {
   const aiServiceUrl = (process.env.AI_SERVICE_URL || 'http://localhost:8001').replace(/\/$/, '');
+  const isVideo = isVideoImportUrl(url);
+  const postPath = isVideo ? 'recipe/import-video' : 'recipe/import';
   let postRes: { data: any };
   try {
     postRes = await axios.post<{ jobId?: string; status?: string; title?: string; ingredients?: string }>(
-      `${aiServiceUrl}/import-recipe`,
+      `${aiServiceUrl}/${postPath}`,
       { url },
       { timeout: AI_POST_TIMEOUT_MS, headers: { 'Content-Type': 'application/json' } }
     );
@@ -152,7 +177,7 @@ async function startAiImport(url: string): Promise<{ aiJobId?: string; result?: 
   }
   const data = postRes.data ?? {};
   if (data.jobId) {
-    return { aiJobId: data.jobId };
+    return { aiJobId: data.jobId, isVideo };
   }
   if (isSyncRecipeResult(data)) {
     assertNotMockResult(data);
@@ -163,13 +188,18 @@ async function startAiImport(url: string): Promise<{ aiJobId?: string; result?: 
 }
 
 /** Call AI service async import: POST returns jobId, poll until completed/failed or timeout. Accepts sync recipe response. Returns result or throws. */
-export async function callAiImportAndWait(url: string, existingAiJobId?: string | null): Promise<any> {
+export async function callAiImportAndWait(
+  url: string,
+  existingAiJobId?: string | null,
+  existingKind?: AiImportKind
+): Promise<any> {
+  const kind = existingKind ?? 'url';
   if (existingAiJobId) {
-    return pollAiImportResult(existingAiJobId);
+    return pollAiImportResult(existingAiJobId, kind);
   }
   const start = await startAiImport(url);
   if (start.result != null) return start.result;
-  if (start.aiJobId) return pollAiImportResult(start.aiJobId);
+  if (start.aiJobId) return pollAiImportResult(start.aiJobId, start.isVideo ? 'video' : 'url');
   throw new Error('AI service did not return jobId');
 }
 
@@ -195,8 +225,9 @@ export async function startImportJobOnly(jobId: string): Promise<void> {
       return;
     }
     if (start.aiJobId) {
-      await updateImportJobAiJobId(jobId, start.aiJobId);
-      console.log(`[IMPORT] Job ${jobId} AI jobId: ${start.aiJobId}, will poll status periodically`);
+      const kind: AiImportKind = start.isVideo ? 'video' : 'url';
+      await updateImportJobAiJobId(jobId, start.aiJobId, kind);
+      console.log(`[IMPORT] Job ${jobId} AI jobId: ${start.aiJobId} (${kind}), will poll status periodically`);
       return;
     }
     throw new Error('AI service did not return jobId');
@@ -216,11 +247,12 @@ export async function pollProcessingImportJob(): Promise<void> {
 
   const processing = await prisma.importJob.findFirst({
     where: { status: 'processing' },
-    select: { id: true, aiImportJobId: true, url: true },
+    select: { id: true, aiImportJobId: true, aiImportKind: true, url: true },
   });
   if (!processing) return;
 
   const aiServiceUrl = (process.env.AI_SERVICE_URL || 'http://localhost:8001').replace(/\/$/, '');
+  const kind: AiImportKind = (processing.aiImportKind as AiImportKind) ?? 'url';
 
   // Processing job has no AI server job id: call import API and store job id (or sync result)
   if (!processing.aiImportJobId) {
@@ -234,8 +266,9 @@ export async function pollProcessingImportJob(): Promise<void> {
         return;
       }
       if (start.aiJobId) {
-        await updateImportJobAiJobId(processing.id, start.aiJobId);
-        console.log(`[IMPORT] Job ${processing.id} AI jobId stored: ${start.aiJobId}, will poll status`);
+        const startKind: AiImportKind = start.isVideo ? 'video' : 'url';
+        await updateImportJobAiJobId(processing.id, start.aiJobId, startKind);
+        console.log(`[IMPORT] Job ${processing.id} AI jobId stored: ${start.aiJobId} (${startKind}), will poll status`);
         return;
       }
       throw new Error('AI service did not return jobId');
@@ -249,10 +282,11 @@ export async function pollProcessingImportJob(): Promise<void> {
     return;
   }
 
-  // Has AI job id: call AI server to check status
+  // Has AI job id: call AI server to check status (url vs video endpoint)
+  const statusPath = kind === 'video' ? 'recipe/import-video/status' : 'recipe/import/status';
   try {
     const statusRes = await axios.get<{ status: string; result?: any; error?: string }>(
-      `${aiServiceUrl}/import-recipe/status/${processing.aiImportJobId}`,
+      `${aiServiceUrl}/${statusPath}/${processing.aiImportJobId}`,
       { timeout: AI_STATUS_REQUEST_TIMEOUT_MS }
     );
     const { status, result, error } = statusRes.data ?? {};
@@ -282,6 +316,7 @@ export async function pollProcessingImportJob(): Promise<void> {
         startedAt: null,
         completedAt: null,
         aiImportJobId: null,
+        aiImportKind: null,
         updatedAt: new Date(),
       },
     });
@@ -307,16 +342,18 @@ export async function processImportJob(jobId: string): Promise<void> {
 
     let result: any;
     const existingAiJobId = job.aiImportJobId ?? null;
+    const existingKind: AiImportKind = (job.aiImportKind as AiImportKind) ?? 'url';
     if (existingAiJobId) {
-      console.log(`[IMPORT] Resuming job ${jobId} with AI job ${existingAiJobId}`);
-      result = await callAiImportAndWait(job.url, existingAiJobId);
+      console.log(`[IMPORT] Resuming job ${jobId} with AI job ${existingAiJobId} (${existingKind})`);
+      result = await callAiImportAndWait(job.url, existingAiJobId, existingKind);
     } else {
       const start = await startAiImport(job.url);
       if (start.result != null) {
         result = start.result;
       } else if (start.aiJobId) {
-        await updateImportJobAiJobId(jobId, start.aiJobId);
-        result = await pollAiImportResult(start.aiJobId);
+        const startKind: AiImportKind = start.isVideo ? 'video' : 'url';
+        await updateImportJobAiJobId(jobId, start.aiJobId, startKind);
+        result = await pollAiImportResult(start.aiJobId, startKind);
       } else {
         throw new Error('AI service did not return jobId');
       }
@@ -388,7 +425,7 @@ export async function resetStuckProcessingJobs(): Promise<number> {
   const cutoff = new Date(Date.now() - STUCK_PROCESSING_MINUTES * 60 * 1000);
   const result = await prisma.importJob.updateMany({
     where: { status: 'processing', updatedAt: { lt: cutoff } },
-    data: { status: 'pending', aiImportJobId: null, updatedAt: new Date() },
+    data: { status: 'pending', aiImportJobId: null, aiImportKind: null, updatedAt: new Date() },
   });
   if (result.count > 0) {
     console.log(`[IMPORT] Scheduler: reset ${result.count} stuck "processing" job(s) back to pending`);
@@ -400,7 +437,7 @@ export async function resetStuckProcessingJobs(): Promise<number> {
 export async function resetProcessingJobsOnStartup(): Promise<void> {
   const processing = await prisma.importJob.findMany({
     where: { status: 'processing' },
-    select: { id: true, aiImportJobId: true, url: true },
+    select: { id: true, aiImportJobId: true, aiImportKind: true, url: true },
   });
   if (processing.length === 0) return;
 
@@ -411,14 +448,16 @@ export async function resetProcessingJobsOnStartup(): Promise<void> {
     if (!job.aiImportJobId) {
       await prisma.importJob.update({
         where: { id: job.id },
-        data: { status: 'pending', error: null, startedAt: null, completedAt: null, aiImportJobId: null, updatedAt: new Date() },
+        data: { status: 'pending', error: null, startedAt: null, completedAt: null, aiImportJobId: null, aiImportKind: null, updatedAt: new Date() },
       });
       resetCount++;
       continue;
     }
+    const kind: AiImportKind = (job.aiImportKind as AiImportKind) ?? 'url';
+    const statusPath = kind === 'video' ? 'recipe/import-video/status' : 'recipe/import/status';
     try {
       const statusRes = await axios.get<{ status: string; result?: any; error?: string }>(
-        `${aiServiceUrl}/import-recipe/status/${job.aiImportJobId}`,
+        `${aiServiceUrl}/${statusPath}/${job.aiImportJobId}`,
         { timeout: AI_STATUS_REQUEST_TIMEOUT_MS }
       );
       const { status, result, error } = statusRes.data;
@@ -435,7 +474,7 @@ export async function resetProcessingJobsOnStartup(): Promise<void> {
       if (axios.isAxiosError(e) && e.response?.status === 404) {
         await prisma.importJob.update({
           where: { id: job.id },
-          data: { status: 'pending', error: null, startedAt: null, completedAt: null, aiImportJobId: null, updatedAt: new Date() },
+          data: { status: 'pending', error: null, startedAt: null, completedAt: null, aiImportJobId: null, aiImportKind: null, updatedAt: new Date() },
         });
         resetCount++;
       } else {

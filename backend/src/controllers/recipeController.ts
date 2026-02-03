@@ -55,11 +55,14 @@ export function uploadImageHandler(req: MulterRequest, res: Response) {
 }
 
 export async function getAllRecipes(req: Request, res: Response) {
+  const start = Date.now();
   try {
     const q = typeof req.query.q === 'string' ? req.query.q : undefined;
     const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 12;
     const recipes = await recipeService.getAllPublicRecipes(q, page, limit);
+    const ms = Date.now() - start;
+    console.log(`[GET] /api/recipes page=${page} limit=${limit} → ${recipes.length} recipes in ${ms}ms`);
     res.json(recipes);
   } catch (err) {
     console.error(err);
@@ -87,10 +90,47 @@ export async function getRecipeById(req: Request, res: Response) {
   }
 }
 
-// Function to download external image and save locally
+// Function to download external image or copy local file and save to uploads
 export async function downloadAndSaveImage(imageUrl: string): Promise<string> {
-  if (!imageUrl || !imageUrl.startsWith('http')) {
-    return imageUrl; // Return as-is if not external URL
+  if (!imageUrl || typeof imageUrl !== 'string') {
+    return imageUrl ?? '';
+  }
+
+  // Local file path from AI service (e.g. /tmp/ai-service-thumbnails/<job_id>.jpg)
+  let localPath: string | null = null;
+  if (imageUrl.startsWith('file://')) {
+    try {
+      const u = new URL(imageUrl);
+      localPath = u.pathname;
+    } catch {
+      localPath = null;
+    }
+  } else if (imageUrl.startsWith('/') && path.isAbsolute(imageUrl)) {
+    localPath = imageUrl;
+  }
+  if (localPath) {
+    try {
+      if (!fs.existsSync(localPath)) {
+        console.warn(`Local image path does not exist: ${localPath}`);
+        return '';
+      }
+      const ext = path.extname(localPath).toLowerCase() || '.jpg';
+      const validExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+      const extSafe = validExts.includes(ext) ? ext : '.jpg';
+      const hash = crypto.createHash('md5').update(localPath + String(Date.now())).digest('hex');
+      const filename = `recipe-${hash}${extSafe}`;
+      const filepath = path.join(uploadDir, filename);
+      fs.copyFileSync(localPath, filepath);
+      console.log(`Copied local image to ${filepath}`);
+      return `/uploads/${filename}`;
+    } catch (err) {
+      console.error(`Error copying local image from ${localPath}:`, err);
+      return '';
+    }
+  }
+
+  if (!imageUrl.startsWith('http')) {
+    return imageUrl; // Return as-is if not external URL and not local path
   }
 
   try {

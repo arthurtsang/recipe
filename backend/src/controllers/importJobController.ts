@@ -264,6 +264,11 @@ export async function saveImportedRecipe(req: Request, res: Response) {
     const sourceUrlNormalized = (job.url || '').trim().replace(/\/$/, '') || null;
 
     const created = await prisma.$transaction(async (tx) => {
+      let importedTag = await tx.tag.findUnique({ where: { name: 'imported' } });
+      if (!importedTag) {
+        importedTag = await tx.tag.create({ data: { name: 'imported' } });
+      }
+
       const existingRecipe =
         sourceUrlNormalized || job.url
           ? await tx.recipe.findFirst({
@@ -274,6 +279,17 @@ export async function saveImportedRecipe(req: Request, res: Response) {
               select: { id: true },
             })
           : null;
+
+      const ensureImportedTag = async (recipeId: string) => {
+        const existing = await tx.recipeTag.findFirst({
+          where: { recipeId, tagId: importedTag!.id },
+        });
+        if (!existing) {
+          await tx.recipeTag.create({
+            data: { recipeId, tagId: importedTag!.id },
+          });
+        }
+      };
 
       if (existingRecipe) {
         const version = await tx.recipeVersion.create({
@@ -300,6 +316,7 @@ export async function saveImportedRecipe(req: Request, res: Response) {
             difficultyReasoning,
           },
         });
+        await ensureImportedTag(existingRecipe.id);
         await tx.importJob.update({
           where: { id: jobId },
           data: { savedRecipeId: existingRecipe.id, updatedAt: new Date() },
@@ -335,6 +352,7 @@ export async function saveImportedRecipe(req: Request, res: Response) {
         where: { id: recipe.id },
         data: { currentVersionId: version.id },
       });
+      await ensureImportedTag(recipe.id);
       await tx.importJob.update({
         where: { id: jobId },
         data: { savedRecipeId: recipe.id, updatedAt: new Date() },
