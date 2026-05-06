@@ -1,206 +1,71 @@
-# Metro Bistro Backup Strategy
+# Metro Bistro backup strategy
 
-## Overview
-This document outlines the backup strategy for Metro Bistro, ensuring data safety and recovery capabilities.
+## Database (primary)
 
-## ⚠️ IMPORTANT: Database Safety Rules
+The database is **PostgreSQL** (typically **Supabase**). Logical backups are:
 
-### NEVER run these commands on production data:
-- `npx prisma migrate reset --force` (DROPS ALL DATA)
-- `npx prisma db push --force-reset` (DROPS ALL DATA)
-- Any command that mentions "reset" or "drop"
+- **Format:** `pg_dump` → **gzip** → object in **Wasabi** (same bucket as recipe images).
+- **Key prefix:** `db-backups/` by default (`backup-key-prefix` in `.wasabi.yaml` or `WASABI_BACKUP_KEY_PREFIX`).
+- **Script:** `backend/scripts/backup-db-to-wasabi.ts`
+- **Wrapper:** `./backup-metro-bistro.sh` from the repo root (runs the script with `cwd` = `backend/`).
 
-### Safe migration commands:
-- `npx prisma migrate dev --name <migration_name>` (creates new migration)
-- `npx prisma migrate deploy` (applies pending migrations)
-- `npx prisma generate` (regenerates client)
+### Requirements on the backup host
 
-## Backup Components
+- **`pg_dump`** from a client **≥ server major version** (Supabase often runs PostgreSQL 17). Ubuntu’s default `postgresql-client` may be too old.
+- **Automatic fallback:** if local `pg_dump` fails with a server/client version mismatch and **Docker** is available, this script retries using **`postgres:17-alpine`** (override with **`PG_DUMP_DOCKER_IMAGE`**).
+- **Docker always:** set **`PG_DUMP_DOCKER=1`** to skip the host `pg_dump`.
+- **`PG_DUMP_BIN`** — non-default path to `pg_dump` when not using Docker.
+- `DATABASE_URL` in `backend/.env` (same as the app)
+- Wasabi credentials (`.wasabi.yaml` or env; for systemd, set `WASABI_CONFIG_PATH` if the file is not next to `backend/`)
 
-### 1. Database Backup
-- **Format**: PostgreSQL dump (.sql)
-- **Content**: Complete database with all tables, data, and schema
-- **Location**: `/mnt/Backup/metro-bistro/`
+### Retention
 
-### 2. Uploads Folder Backup
-- **Content**: All recipe images and uploaded files
-- **Cleanup**: Orphaned images (from deleted recipes) are removed before backup
-- **Location**: `/mnt/Backup/metro-bistro/`
+- **`BACKUP_RETENTION_DAYS`** (default `7`): after each successful upload, objects under the backup prefix older than this are **deleted** from Wasabi (only keys ending in `.sql.gz`).
 
-### 3. Backup Metadata
-- **Content**: Backup date, statistics, and information
-- **File**: `backup-info.txt` in each backup
+### Scheduled backups
 
-## Backup Schedule
+- **Timer:** `metro-bistro-backup.timer` (example: daily)
+- **Service:** `metro-bistro-backup.service` → runs `npx tsx scripts/backup-db-to-wasabi.ts` as the app user (`tsangc1` in the shipped unit file).
 
-### Automated Backups
-- **Frequency**: Daily at 2:00 AM
-- **Retention**: 7 days (old backups automatically deleted)
-- **Service**: `metro-bistro-backup.timer`
-
-### Manual Backups
-- **Command**: `./backup-metro-bistro.sh`
-- **Use case**: Before major changes, deployments, or migrations
-
-## Backup Scripts
-
-### 1. `backup-metro-bistro.sh`
-**Purpose**: Create comprehensive backup with cleanup
-
-**Features**:
-- Cleans orphaned images before backup
-- Creates timestamped backup directory
-- Compresses backup to `.tar.gz`
-- Includes database statistics
-- Auto-cleanup of old backups (7 days)
-
-**Usage**:
 ```bash
-./backup-metro-bistro.sh
-```
-
-### 2. `restore-metro-bistro.sh`
-**Purpose**: Restore from backup
-
-**Features**:
-- Lists available backups
-- Interactive backup selection
-- Safety confirmations
-- Stops/restarts backend service
-- Preserves current data as backup
-
-**Usage**:
-```bash
-./restore-metro-bistro.sh
-```
-
-## Backup Location
-
-### Primary Location
-- **Path**: `/mnt/Backup/metro-bistro/`
-- **NFS Sync**: Automatically synced to cloud via NFS
-- **Format**: `metro-bistro-backup-YYYYMMDD_HHMMSS.tar.gz`
-
-### Backup Contents
-```
-metro-bistro-backup-20250730_180000.tar.gz
-├── database.sql          # Complete database dump
-├── uploads/              # Cleaned uploads folder
-│   ├── recipe-*.jpg
-│   └── ...
-└── backup-info.txt       # Backup metadata
-```
-
-## Systemd Services
-
-### Backup Timer
-- **Service**: `metro-bistro-backup.timer`
-- **Schedule**: Daily at 2:00 AM
-- **Status**: `sudo systemctl status metro-bistro-backup.timer`
-
-### Manual Backup Service
-- **Service**: `metro-bistro-backup.service`
-- **Usage**: `sudo systemctl start metro-bistro-backup.service`
-
-## Monitoring and Maintenance
-
-### Check Backup Status
-```bash
-# Check timer status
 sudo systemctl status metro-bistro-backup.timer
-
-# View recent backup logs
 sudo journalctl -u metro-bistro-backup.service --since "24 hours ago"
-
-# List available backups
-ls -la /mnt/Backup/metro-bistro/
 ```
 
-### Backup Verification
+### Manual backup
+
 ```bash
-# Check backup integrity
-tar -tzf /mnt/Backup/metro-bistro/metro-bistro-backup-*.tar.gz
-
-# View backup info
-tar -xzf /mnt/Backup/metro-bistro/metro-bistro-backup-*.tar.gz -O backup-info.txt
+cd /path/to/recipe/backend
+npx tsx scripts/backup-db-to-wasabi.ts
 ```
 
-## Emergency Procedures
+### Restore from a Wasabi backup
 
-### Before Any Database Changes
-1. **Create manual backup**:
-   ```bash
-   ./backup-metro-bistro.sh
-   ```
+1. Download the `.sql.gz` object from the Wasabi console or AWS CLI (`s3` endpoint = Wasabi), or use a presigned URL.
+2. **Do not** run destructive SQL on production without a fresh backup confirmation.
 
-2. **Verify backup**:
-   ```bash
-   ls -la /mnt/Backup/metro-bistro/
-   ```
-
-### If Database is Corrupted
-1. **Stop services**:
-   ```bash
-   sudo systemctl stop metro-bistro-backend
-   ```
-
-2. **Restore from backup**:
-   ```bash
-   ./restore-metro-bistro.sh
-   ```
-
-3. **Verify restoration**:
-   ```bash
-   sudo systemctl start metro-bistro-backend
-   # Check application functionality
-   ```
-
-## Best Practices
-
-### 1. Always Backup Before:
-- Running database migrations
-- Deploying new versions
-- Making schema changes
-- Testing new features
-
-### 2. Regular Verification:
-- Check backup logs weekly
-- Verify backup file integrity monthly
-- Test restore procedure quarterly
-
-### 3. Documentation:
-- Keep this document updated
-- Document any custom backup procedures
-- Maintain restore procedure logs
-
-## Troubleshooting
-
-### Backup Fails
-1. Check NFS mount: `df -h /mnt/Backup`
-2. Check disk space: `df -h`
-3. Check service logs: `sudo journalctl -u metro-bistro-backup.service`
-
-### Restore Fails
-1. Verify backup file integrity
-2. Check database connection
-3. Ensure sufficient disk space
-4. Check service status
-
-### Orphaned Images
-The backup script automatically cleans orphaned images, but you can manually clean them:
 ```bash
-cd backend/uploads
-# The backup script will handle cleanup automatically
+gunzip -c metro-bistro-backup_YYYYMMDD_HHMMSS.sql.gz | psql "$DATABASE_URL"
 ```
 
-## Security Considerations
+Adjust for your host’s `psql` and SSL settings (Supabase pooler vs direct).
 
-- Backup files contain sensitive data
-- Ensure `/mnt/Backup` has appropriate permissions
-- Consider encrypting backup files for additional security
-- Regularly rotate backup access credentials
+## Recipe media
 
----
+Images are stored under the **recipe** key prefix (e.g. `recipes/`) in the same bucket. They are **not** included in the DB dump; rely on Wasabi bucket policies and optional provider-level replication for object durability.
 
-**Last Updated**: July 30, 2025
-**Version**: 1.0 
+## Legacy: local Docker PostgreSQL + `/mnt/Backup`
+
+Older installs used `metro-bistro-postgres` and tarball backups under `/mnt/Backup/metro-bistro`. **Local Postgres is no longer shipped in this repo.** Historical `.tar.gz` backups can still be restored manually with `psql` / extracting `database.sql` if you have them.
+
+## Safety
+
+Never run on production without a plan:
+
+- `npx prisma migrate reset --force`
+- `npx prisma db push --force-reset`
+
+Safe migration / deploy:
+
+- `npx prisma migrate deploy`
+- `npx prisma generate`

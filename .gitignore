@@ -1,6 +1,9 @@
 node_modules
 # Keep environment variables out of version control
 .env
+.supabase
+.supabase-target-url
+.wasabi.yaml
 
 uploads/
 __pycache__/
@@ -11,3 +14,6 @@ __pycache__/
 backend/dist/
 web/dist/
 *.tsbuildinfo
+
+# E2E failure artifacts
+tests/screenshots/*.png

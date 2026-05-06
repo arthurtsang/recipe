@@ -1,15 +1,18 @@
 [Unit]
-Description=Metro Bistro Backup Service
-After=network.target metro-bistro-postgres.service metro-bistro-backend.service
-Wants=metro-bistro-postgres.service
+Description=Metro Bistro Database Backup (Wasabi)
+After=network.target metro-bistro-backend.service
 
 [Service]
 Type=oneshot
-User=root
-WorkingDirectory=/home/tsangc1/Projects/recipe
-ExecStart=/home/tsangc1/Projects/recipe/backup-metro-bistro.sh
+User=tsangc1
+Group=tsangc1
+WorkingDirectory=/home/tsangc1/Projects/recipe/backend
+EnvironmentFile=-/home/tsangc1/Projects/recipe/backend/.env
+Environment=WASABI_CONFIG_PATH=/home/tsangc1/Projects/recipe/.wasabi.yaml
+Environment=PATH=/home/tsangc1/Projects/recipe/.venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/npx tsx scripts/backup-db-to-wasabi.ts
 StandardOutput=journal
 StandardError=journal
 
 [Install]
-WantedBy=multi-user.target 
+WantedBy=multi-user.target

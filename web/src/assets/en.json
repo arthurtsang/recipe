@@ -13,6 +13,7 @@
   "loadingRecipe": "Loading recipe...",
   "error": "Error",
   "noRecipesFound": "No recipes found.",
+  "tryAdjustingSearch": "Try adjusting your search terms.",
   "recipeNotFound": "Recipe not found.",
   "recipeDetail": "Recipe Detail",
   "save": "Save",

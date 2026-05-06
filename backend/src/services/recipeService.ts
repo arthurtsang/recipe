@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { userDisplayName } from './userService';
 
 const prisma = new PrismaClient();
 
@@ -27,6 +28,7 @@ export async function getAllPublicRecipes(q?: string, page: number = 1, limit: n
           id: true,
           name: true,
           email: true,
+          alias: true,
         },
       },
       versions: {
@@ -45,27 +47,31 @@ export async function getAllPublicRecipes(q?: string, page: number = 1, limit: n
     skip: (page - 1) * limit,
     take: limit,
   });
-  // Map ratings to averageRating and remove ratings array
+  // Map ratings to averageRating and add user displayName (alias-first for app-wide consistency)
   return recipes.map((r: any) => {
     const averageRating = r.ratings.length
       ? r.ratings.reduce((sum: number, rat: { value: number }) => sum + rat.value, 0) / r.ratings.length
       : null;
     const { ratings, ...rest } = r;
-    return { ...rest, averageRating };
+    const user = rest.user ? { ...rest.user, displayName: userDisplayName(rest.user) } : rest.user;
+    return { ...rest, user, averageRating };
   });
 }
 
 export async function getRecipeById(id: string) {
-  return prisma.recipe.findUnique({
+  const recipe = await prisma.recipe.findUnique({
     where: { id, isPublic: true },
     include: {
-      user: { select: { id: true, name: true, email: true } },
+      user: { select: { id: true, name: true, email: true, alias: true } },
       versions: { orderBy: { createdAt: 'asc' } },
       ratings: true,
       comments: true,
       tags: { include: { tag: true } },
     },
   });
+  if (!recipe) return null;
+  const user = recipe.user ? { ...recipe.user, displayName: userDisplayName(recipe.user) } : recipe.user;
+  return { ...recipe, user };
 }
 
 export async function createRecipe(data: {

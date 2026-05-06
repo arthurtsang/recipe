@@ -12,6 +12,23 @@ import type { FileFilterCallback } from 'multer';
 import type { Request as ExpressRequest } from 'express';
 import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
+import {
+  isWasabiEnabled,
+  promoteLocalFileToWasabi,
+  deleteWasabiObjectByPublicUrl,
+  isWasabiPublicUrl,
+  parseWasabiKeyFromPublicUrl,
+  wasabiPresignedGetUrl,
+  getWasabiConfig,
+} from '../lib/wasabiStorage';
+import {
+  resolveClientSideRecipeImageUrl,
+  decodeObjectKeyFromMediaParam,
+  normalizeListRecipesForClient,
+  normalizeRecipeImageFieldsForClient,
+  resolveImageUrlForStorage,
+  wasabiPresignExpiresSec,
+} from '../lib/recipeMedia';
 
 // Extend Express Request to include file property
 interface MulterRequest extends Request {
@@ -19,6 +36,13 @@ interface MulterRequest extends Request {
 }
 
 const prisma = new PrismaClient();
+
+async function resolveStoredImageUrl(localPath: string, filename: string): Promise<string> {
+  if (isWasabiEnabled()) {
+    return promoteLocalFileToWasabi(localPath, filename, true);
+  }
+  return `/uploads/${filename}`;
+}
 
 const uploadDir = path.resolve(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
@@ -47,11 +71,26 @@ const upload = multer({
 
 export const uploadImage = upload.single('image');
 
-export function uploadImageHandler(req: MulterRequest, res: Response) {
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  // Return a URL relative to /uploads
-  const url = `/uploads/${req.file.filename}`;
-  res.json({ url });
+export async function uploadImageHandler(req: MulterRequest, res: Response) {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    if (isWasabiEnabled()) {
+      const url = await promoteLocalFileToWasabi(req.file.path, req.file.filename, true);
+      return res.json({ url: (await resolveClientSideRecipeImageUrl(url)) ?? url });
+    }
+    const url = `/uploads/${req.file.filename}`;
+    res.json({ url });
+  } catch (e) {
+    console.error('uploadImageHandler', e);
+    if (req.file?.path && fs.existsSync(req.file.path)) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch {
+        /* ignore */
+      }
+    }
+    res.status(500).json({ error: 'Upload failed' });
+  }
 }
 
 export async function getAllRecipes(req: Request, res: Response) {
@@ -63,7 +102,7 @@ export async function getAllRecipes(req: Request, res: Response) {
     const recipes = await recipeService.getAllPublicRecipes(q, page, limit);
     const ms = Date.now() - start;
     console.log(`[GET] /api/recipes page=${page} limit=${limit} → ${recipes.length} recipes in ${ms}ms`);
-    res.json(recipes);
+    res.json(await normalizeListRecipesForClient(recipes));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch recipes' });
@@ -75,14 +114,28 @@ export async function getRecipeById(req: Request, res: Response) {
     const recipe = await recipeService.getRecipeById(req.params.id);
     if (!recipe) return res.status(404).json({ error: 'Recipe not found' });
 
-    // Rewrite /uploads/ to /api/uploads/ so frontend hits our static middleware
+    // Rewrite /uploads/ to absolute app URL; Wasabi URLs become presigned GETs (direct to bucket)
     if (recipe.imageUrl?.startsWith('/uploads/')) {
       recipe.imageUrl = recipe.imageUrl.replace(/^\/uploads\/?/, '/api/uploads/');
       const protocol = req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http');
       const host = req.get('host');
       recipe.imageUrl = `${protocol}://${host}${recipe.imageUrl}`;
+    } else if (recipe.imageUrl) {
+      recipe.imageUrl = (await resolveClientSideRecipeImageUrl(recipe.imageUrl)) ?? recipe.imageUrl;
     }
-    
+    if (recipe.versions?.length) {
+      const protocol = req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http');
+      const host = req.get('host');
+      for (const v of recipe.versions) {
+        if (v.imageUrl?.startsWith('/uploads/')) {
+          let u = v.imageUrl.replace(/^\/uploads\/?/, '/api/uploads/');
+          v.imageUrl = `${protocol}://${host}${u}`;
+        } else if (v.imageUrl) {
+          v.imageUrl = (await resolveClientSideRecipeImageUrl(v.imageUrl)) ?? v.imageUrl;
+        }
+      }
+    }
+
     res.json(recipe);
   } catch (err) {
     console.error(err);
@@ -94,6 +147,10 @@ export async function getRecipeById(req: Request, res: Response) {
 export async function downloadAndSaveImage(imageUrl: string): Promise<string> {
   if (!imageUrl || typeof imageUrl !== 'string') {
     return imageUrl ?? '';
+  }
+
+  if (imageUrl.startsWith('https://') && imageUrl.includes('wasabisys.com')) {
+    return imageUrl;
   }
 
   // Local file path from AI service (e.g. /tmp/ai-service-thumbnails/<job_id>.jpg)
@@ -122,7 +179,7 @@ export async function downloadAndSaveImage(imageUrl: string): Promise<string> {
       const filepath = path.join(uploadDir, filename);
       fs.copyFileSync(localPath, filepath);
       console.log(`Copied local image to ${filepath}`);
-      return `/uploads/${filename}`;
+      return await resolveStoredImageUrl(filepath, filename);
     } catch (err) {
       console.error(`Error copying local image from ${localPath}:`, err);
       return '';
@@ -140,6 +197,10 @@ export async function downloadAndSaveImage(imageUrl: string): Promise<string> {
     const pathMatch = url.pathname.match(/^\/(?:api\/)?uploads\/(.+)$/);
     if (pathMatch && (url.hostname === 'localhost' || url.hostname === '127.0.0.1')) {
       const relativePath = pathMatch[1];
+      const localUpload = path.join(uploadDir, path.basename(relativePath));
+      if (isWasabiEnabled() && fs.existsSync(localUpload)) {
+        return await resolveStoredImageUrl(localUpload, path.basename(relativePath));
+      }
       // Never download from localhost — backend serves HTTP, so https would cause SSL error.
       // Return the local path as-is (same image URL); if file is missing, recipe keeps the path.
       return `/uploads/${relativePath}`;
@@ -166,7 +227,7 @@ export async function downloadAndSaveImage(imageUrl: string): Promise<string> {
     // Check if file already exists
     if (fs.existsSync(filepath)) {
       console.log(`File already exists: ${filepath}`);
-      return `/uploads/${filename}`;
+      return await resolveStoredImageUrl(filepath, filename);
     }
 
     // Only external URLs reach here; localhost uploads are handled above and never fetched.
@@ -192,7 +253,13 @@ export async function downloadAndSaveImage(imageUrl: string): Promise<string> {
         fileStream.on('finish', () => {
           fileStream.close();
           console.log(`Successfully downloaded image to ${filepath}`);
-          resolve(`/uploads/${filename}`);
+          void (async () => {
+            try {
+              resolve(await resolveStoredImageUrl(filepath, filename));
+            } catch (err) {
+              reject(err);
+            }
+          })();
         });
 
         fileStream.on('error', (err) => {
@@ -234,7 +301,9 @@ export async function createRecipe(req: Request, res: Response) {
     console.log('Found user:', dbUser.id);
 
     // Download external image if provided
-    const localImageUrl = imageUrl ? await downloadAndSaveImage(imageUrl) : '';
+    const localImageUrl = imageUrl
+      ? await downloadAndSaveImage(resolveImageUrlForStorage(imageUrl) ?? imageUrl)
+      : '';
 
     // Create the recipe first
     const recipe = await prisma.recipe.create({
@@ -275,7 +344,7 @@ export async function createRecipe(req: Request, res: Response) {
       },
     });
 
-    res.status(201).json(updatedRecipe);
+    res.status(201).json(await normalizeRecipeImageFieldsForClient(updatedRecipe));
   } catch (err: unknown) {
     if (err && typeof err === 'object' && 'code' in err) {
       const dbError = err as { code: string };
@@ -316,23 +385,18 @@ export async function updateRecipe(req: Request, res: Response) {
 
     // Treat empty string as no image
     const rawImageUrl = (typeof imageUrl === 'string' && !imageUrl.trim()) ? null : (imageUrl ?? null);
-    // Download external image if provided and different from current
-    const localImageUrl = rawImageUrl && rawImageUrl !== existingRecipe.imageUrl
-      ? await downloadAndSaveImage(rawImageUrl)
-      : rawImageUrl;
+    const normalizedIncoming =
+      rawImageUrl == null ? null : (resolveImageUrlForStorage(rawImageUrl) ?? rawImageUrl);
+    const localImageUrl =
+      normalizedIncoming && normalizedIncoming !== existingRecipe.imageUrl
+        ? await downloadAndSaveImage(normalizedIncoming)
+        : normalizedIncoming;
 
-    // When updating in place, delete old local image file if we're replacing or removing the image
+    // When updating in place, delete old stored image if we're replacing or removing the image
     if (createNewVersion === false) {
       const oldImageUrl = existingRecipe.imageUrl ?? existingRecipe.currentVersion?.imageUrl ?? null;
-      if (oldImageUrl && oldImageUrl.startsWith('/uploads/') && localImageUrl !== oldImageUrl) {
-        const oldPath = path.join(uploadDir, path.basename(oldImageUrl));
-        try {
-          if (fs.existsSync(oldPath)) {
-            fs.unlinkSync(oldPath);
-          }
-        } catch (e) {
-          console.warn('Could not delete old image file:', oldPath, e);
-        }
+      if (oldImageUrl && localImageUrl !== oldImageUrl) {
+        deleteStoredImageIfExists(oldImageUrl);
       }
     }
 
@@ -402,7 +466,7 @@ export async function updateRecipe(req: Request, res: Response) {
     }
     // Ensure versions is always an array so frontend never crashes
     const payload = { ...recipe, versions: recipe.versions ?? [] };
-    res.json(payload);
+    res.json(await normalizeRecipeImageFieldsForClient(payload));
   } catch (err: unknown) {
     if (err && typeof err === 'object' && 'code' in err) {
       const dbError = err as { code: string };
@@ -415,13 +479,20 @@ export async function updateRecipe(req: Request, res: Response) {
   }
 }
 
-function deleteLocalImageIfExists(imageUrl: string | null | undefined): void {
-  if (!imageUrl || !imageUrl.startsWith('/uploads/')) return;
-  const imgPath = path.join(uploadDir, path.basename(imageUrl));
-  try {
-    if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
-  } catch (e) {
-    console.warn('Could not delete image file:', imgPath, e);
+function deleteStoredImageIfExists(imageUrl: string | null | undefined): void {
+  if (!imageUrl) return;
+  const resolved = resolveImageUrlForStorage(imageUrl) ?? imageUrl;
+  if (resolved.startsWith('/uploads/')) {
+    const imgPath = path.join(uploadDir, path.basename(resolved));
+    try {
+      if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
+    } catch (e) {
+      console.warn('Could not delete image file:', imgPath, e);
+    }
+    return;
+  }
+  if (isWasabiEnabled() && isWasabiPublicUrl(resolved)) {
+    void deleteWasabiObjectByPublicUrl(resolved);
   }
 }
 
@@ -439,16 +510,13 @@ export async function deleteRecipe(req: Request, res: Response) {
     if (recipe.userId !== dbUser.id) return res.status(403).json({ error: 'Not authorized to delete this recipe' });
 
     // Delete main recipe image if local
-    deleteLocalImageIfExists(recipe.imageUrl);
-    // Delete all version images if local (dedupe by path in case recipe.imageUrl === version.imageUrl)
-    const deletedPaths = new Set<string>();
+    deleteStoredImageIfExists(recipe.imageUrl);
+    // Delete all version images (dedupe by URL in case recipe.imageUrl === version.imageUrl)
+    const deletedUrls = new Set<string>();
     for (const v of recipe.versions) {
-      if (v.imageUrl && v.imageUrl.startsWith('/uploads/')) {
-        const imgPath = path.join(uploadDir, path.basename(v.imageUrl));
-        if (!deletedPaths.has(imgPath)) {
-          deletedPaths.add(imgPath);
-          deleteLocalImageIfExists(v.imageUrl);
-        }
+      if (v.imageUrl && !deletedUrls.has(v.imageUrl)) {
+        deletedUrls.add(v.imageUrl);
+        deleteStoredImageIfExists(v.imageUrl);
       }
     }
 
@@ -476,7 +544,7 @@ export async function deleteRecipeVersion(req: Request, res: Response) {
     if (version.recipeId !== id) return res.status(400).json({ error: 'Version does not belong to this recipe' });
 
     // Delete the version's local image file
-    deleteLocalImageIfExists(version.imageUrl);
+    deleteStoredImageIfExists(version.imageUrl);
 
     await prisma.recipeVersion.delete({ where: { id: versionId } });
 
@@ -560,7 +628,7 @@ export async function searchRecipes(req: Request, res: Response) {
     const page = req.body.page ? parseInt(req.body.page, 10) : 1;
     const limit = req.body.limit ? parseInt(req.body.limit, 10) : 12;
     const recipes = await recipeService.searchRecipesByKeywords(keywords, page, limit);
-    res.json(recipes);
+    res.json(await normalizeListRecipesForClient(recipes));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to search recipes' });
@@ -572,8 +640,10 @@ export async function setAlias(req: Request, res: Response) {
     if (!req.oidc?.user?.email) return res.status(401).json({ error: 'Not authenticated' });
     const dbUser = await userService.getUserByEmail(req.oidc.user.email.toLowerCase());
     if (!dbUser) return res.status(404).json({ error: 'User not found' });
-    const { alias } = req.body;
-    if (!alias || typeof alias !== 'string') return res.status(400).json({ error: 'Alias required' });
+    const raw = req.body?.alias;
+    if (!raw || typeof raw !== 'string') return res.status(400).json({ error: 'Alias required' });
+    const alias = raw.trim().toLowerCase();
+    if (!alias) return res.status(400).json({ error: 'Alias required' });
     // Check for uniqueness
     const existing = await userService.getUserByAlias(alias);
     if (existing && existing.id !== dbUser.id) return res.status(409).json({ error: 'Alias already taken' });
@@ -592,7 +662,8 @@ export async function getRecipesByAlias(req: Request, res: Response) {
     if (!user) return res.status(404).json({ error: 'User not found' });
     const isOwner = req.oidc?.user?.email?.toLowerCase() === user.email;
     const recipes = await recipeService.getRecipesByUserId(user.id, isOwner);
-    res.json({ user, recipes });
+    const userWithDisplayName = { ...user, displayName: userService.userDisplayName(user) };
+    res.json({ user: userWithDisplayName, recipes: await normalizeListRecipesForClient(recipes) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch user recipes' });
@@ -673,6 +744,53 @@ export async function chat(req: Request, res: Response) {
   }
 }
 
+/** Legacy/opaque links: redirect to a presigned Wasabi GET (browser loads object from bucket). */
+export async function serveRecipeMedia(req: Request, res: Response) {
+  try {
+    if (!isWasabiEnabled()) {
+      console.warn(
+        '[serveRecipeMedia] Wasabi not configured — set WASABI_* env vars or WASABI_CONFIG_PATH / .wasabi.yaml'
+      );
+      return res.status(503).json({
+        error: 'Object storage is not configured',
+        hint: 'Set WASABI_ACCESS_KEY_ID, WASABI_SECRET_ACCESS_KEY, WASABI_BUCKET, WASABI_REGION (or use .wasabi.yaml). On systemd, copy the file to the server or inject env in the service unit.',
+      });
+    }
+    const k = typeof req.query.k === 'string' ? req.query.k : '';
+    let decodedForLog: string | null = null;
+    if (k) {
+      try {
+        decodedForLog = Buffer.from(k.trim(), 'base64url').toString('utf8');
+      } catch {
+        decodedForLog = null;
+      }
+    }
+    const key = decodeObjectKeyFromMediaParam(k);
+    if (!key) {
+      const cfg = getWasabiConfig();
+      console.warn('[serveRecipeMedia] invalid image reference (400)', {
+        decodedUtf8: decodedForLog,
+        bucket: cfg?.bucket,
+        keyPrefix: cfg?.keyPrefix,
+        wasabiEnabled: isWasabiEnabled(),
+      });
+      return res.status(400).json({ error: 'Invalid image reference' });
+    }
+    const signed = await wasabiPresignedGetUrl(key, wasabiPresignExpiresSec());
+    return res.redirect(302, signed);
+  } catch (e: unknown) {
+    const name = e && typeof e === 'object' && 'name' in e ? String((e as { name: string }).name) : '';
+    if (name === 'NoSuchKey' || name === 'NotFound') {
+      if (!res.headersSent) return res.status(404).end();
+      return;
+    }
+    console.error('[serveRecipeMedia]', e);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to load image' });
+    }
+  }
+}
+
 // Image proxy to handle CORS-blocked external images
 export async function proxyImage(req: Request, res: Response) {
   try {
@@ -685,6 +803,23 @@ export async function proxyImage(req: Request, res: Response) {
     // Validate that it's a proper image URL
     if (!url.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i)) {
       return res.status(400).json({ error: 'Invalid image URL' });
+    }
+
+    // Wasabi: redirect to presigned GET (browser fetches from bucket)
+    if (isWasabiEnabled() && url.includes('wasabisys.com')) {
+      const key = parseWasabiKeyFromPublicUrl(url);
+      if (key) {
+        try {
+          const signed = await wasabiPresignedGetUrl(key, wasabiPresignExpiresSec());
+          return res.redirect(302, signed);
+        } catch (e) {
+          console.error('[proxy-image] Wasabi presign failed', e);
+          if (!res.headersSent) {
+            return res.status(502).json({ error: 'Failed to fetch stored image' });
+          }
+          return;
+        }
+      }
     }
 
     // Set appropriate headers to mimic a browser request

@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { recipeImageSrc } from '../utils/recipeImageSrc';
 
 interface ImportRecipeProps {
   open: boolean;
@@ -503,9 +504,9 @@ const ImportRecipe: React.FC<ImportRecipeProps> = ({ open, onClose }) => {
                     <Box sx={{ mb: 2, textAlign: 'center' }}>
                       <img
                         src={
-                          recipe.imageUrl.startsWith('http') 
-                            ? `/api/recipes/proxy-image?url=${encodeURIComponent(recipe.imageUrl)}`
-                            : recipe.imageUrl
+                          recipe.imageUrl
+                            ? recipeImageSrc(recipe.imageUrl) ?? ''
+                            : ''
                         }
                         alt={recipe.title}
                         style={{

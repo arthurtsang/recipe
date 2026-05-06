@@ -1,0 +1,83 @@
+# Docker Compose for E2E testing - all-in-one
+# Run: docker compose -f docker-compose.e2e.yml up
+# This starts all services (postgres, mock-oauth, mock-ai, webapp) and runs E2E tests.
+# Use --abort-on-container-exit to stop all containers when tests complete.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: metro_user
+      POSTGRES_PASSWORD: metro_password
+      POSTGRES_DB: metro_bistro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U metro_user -d metro_bistro"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mock-oauth:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.mock-oauth
+    environment:
+      PORT: 9999
+      MOCK_OAUTH_BASE_URL: http://mock-oauth:9999
+      MOCK_OAUTH_SECRET: mock-oauth-secret-for-e2e
+      TEST_USER_EMAIL: test@example.com
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:9999/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mock-ai:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.mock-ai
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  webapp:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.app
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    environment:
+      DATABASE_URL: postgresql://metro_user:metro_password@postgres:5432/metro_bistro
+      PORT: 4000
+      NODE_ENV: production
+      BASE_URL: http://webapp:4000
+      # Note: webapp hostname used (not "app") - Chrome upgrades .app TLD to HTTPS
+      GOOGLE_CLIENT_ID: mock-client-id
+      GOOGLE_CLIENT_SECRET: mock-oauth-secret-for-e2e
+      SESSION_SECRET: e2e-session-secret
+      AI_SERVICE_URL: http://mock-ai:8001
+      ISSUER_BASE_URL: http://mock-oauth:9999
+      ADMIN_EMAIL: test@example.com
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-oauth:
+        condition: service_healthy
+      mock-ai:
+        condition: service_healthy
+
+  e2e-tests:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.e2e
+    environment:
+      BASE_URL: http://webapp:4000
+    depends_on:
+      webapp:
+        condition: service_healthy
+    command: ["./run-e2e.sh"]

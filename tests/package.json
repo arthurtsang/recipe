@@ -1,0 +1,21 @@
+{
+  "name": "recipe-e2e-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "BDD E2E tests for Recipe app",
+  "scripts": {
+    "test": "cucumber-js",
+    "test:headed": "HEADED=1 cucumber-js",
+    "test:report": "cucumber-js --format html:reports/cucumber-report.html"
+  },
+  "dependencies": {
+    "@cucumber/cucumber": "^11.0.0",
+    "@cucumber/pretty-formatter": "^1.0.0",
+    "@playwright/test": "^1.49.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.0"
+  }
+}

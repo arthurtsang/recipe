@@ -3,6 +3,7 @@ import { Card, CardContent, CardMedia, Typography, Box, CardActionArea, Rating, 
 import { Link } from 'react-router-dom';
 
 import { Restaurant, AccessTime, Person } from '@mui/icons-material';
+import { recipeImageSrc } from '../utils/recipeImageSrc';
 
 type RecipeCardProps = {
   recipe: {
@@ -10,7 +11,7 @@ type RecipeCardProps = {
     title: string;
     description?: string;
     imageUrl?: string;
-    user?: { name?: string; email: string };
+    user?: { name?: string | null; email: string; alias?: string | null; displayName?: string };
     averageRating?: number | null;
     estimatedTime?: string;
     difficulty?: string;
@@ -85,17 +86,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
   const estimatedTime = getEstimatedTime();
   const difficulty = getDifficulty();
 
-  // Image src: /uploads/ -> /api/uploads/ (backend serves there), external -> proxy
-  const imageSrc = (() => {
-    if (!recipe.imageUrl) return undefined;
-    if (recipe.imageUrl.startsWith('/uploads/')) {
-      return `${window.location.origin}/api/uploads/${recipe.imageUrl.replace(/^\/uploads\/?/, '')}`;
-    }
-    if (recipe.imageUrl.startsWith('http') && !recipe.imageUrl.startsWith(window.location.origin)) {
-      return `/api/recipes/proxy-image?url=${encodeURIComponent(recipe.imageUrl)}`;
-    }
-    return recipe.imageUrl;
-  })();
+  const imageSrc = recipe.imageUrl ? recipeImageSrc(recipe.imageUrl) : undefined;
 
   return (
     <Card
@@ -197,13 +188,30 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
             </Box>
           )}
 
-          {/* Author info */}
+          {/* Author info — use displayName (alias-first) from API so alias is consistent app-wide */}
           {recipe.user && (
             <Box display="flex" alignItems="center" sx={{ mt: 'auto', pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
               <Person sx={{ fontSize: 16, mr: 0.5, color: 'text.secondary' }} />
-              <Typography variant="body2" color="text.secondary">
-                {recipe.user.name || recipe.user.email}
-              </Typography>
+              {(() => {
+                const u = recipe.user!;
+                const displayName = u.displayName ?? ((u.alias && u.alias.trim()) || u.name || u.email);
+                const linkAlias = (u.alias && u.alias.trim()) || null;
+                return linkAlias ? (
+                  <Link
+                    to={`/users/${linkAlias}`}
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Typography variant="body2" color="text.secondary" sx={{ '&:hover': { textDecoration: 'underline' } }}>
+                      {displayName}
+                    </Typography>
+                  </Link>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    {displayName}
+                  </Typography>
+                );
+              })()}
             </Box>
           )}
         </CardContent>

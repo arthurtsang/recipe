@@ -21,6 +21,8 @@ interface User {
   id: string;
   email: string;
   name?: string;
+  alias?: string | null;
+  displayName?: string;
   isEnabled: boolean;
   createdAt: string;
   updatedAt: string;
@@ -132,7 +134,7 @@ export default function AdminUserApproval({ open, onClose }: AdminUserApprovalPr
                 {users.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell>{user.email}</TableCell>
-                    <TableCell>{user.name || '-'}</TableCell>
+                    <TableCell>{user.displayName || user.alias || user.name || user.email || '-'}</TableCell>
                     <TableCell>
                       <Chip
                         label={user.isEnabled ? 'Enabled' : 'Pending'}

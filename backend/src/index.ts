@@ -73,17 +73,19 @@ app.use(auth({
     // Find or create user in DB; new users default to disabled unless admin
     let dbUser = await prisma.user.findUnique({ where: { email } });
     if (!dbUser) {
+      const defaultAlias = await userService.uniqueDefaultAlias(user.name || email, email);
       dbUser = await prisma.user.create({
         data: {
           email,
           name: user.name,
+          alias: defaultAlias,
           picture: user.picture,
           oidcProvider: 'google',
           oidcSub: user.sub,
           isEnabled: isAdmin, // Admin only; everyone else stays disabled until admin enables
         },
       });
-      console.log(`Created new user: ${email}, enabled: ${isAdmin}`);
+      console.log(`Created new user: ${email}, alias: ${defaultAlias}, enabled: ${isAdmin}`);
     }
     
     // Attach user info to session for later use
@@ -99,7 +101,7 @@ app.use(auth({
 import { requiresEnabledUser, requiresAdmin } from './middleware/auth';
 export { requiresEnabledUser } from './middleware/auth';
 
-// Resolve Bearer token so /api/me and other routes accept API-token auth (e.g. save-mabels-imports.ts)
+// Resolve Bearer token so /api/me and other routes accept API-token auth (e.g. automation scripts using an API token).
 app.use((req: any, res, next) => {
   if (req.oidc?.user?.email) return next();
   const authHeader = req.headers.authorization;
@@ -139,11 +141,14 @@ app.get('/api/me', requiresAuth(), async (req: any, res) => {
     const isAdmin = email === process.env.ADMIN_EMAIL?.toLowerCase();
     const picture = req.oidc?.user?.picture ?? dbUser.picture ?? undefined;
     const name = req.oidc?.user?.name ?? dbUser.name ?? undefined;
+    const displayName = userService.userDisplayName({ ...dbUser, name });
 
     res.json({
       ...dbUser,
       picture,
       name,
+      alias: dbUser.alias ?? undefined,
+      displayName,
       isAdmin,
       isEnabled: dbUser.isEnabled,
     });
@@ -156,17 +161,19 @@ app.get('/api/me', requiresAuth(), async (req: any, res) => {
 // Admin endpoints
 app.get('/api/admin/users', requiresAuth(), requiresAdmin(), async (req, res) => {
   try {
-    const users = await prisma.user.findMany({
+    const rows = await prisma.user.findMany({
       select: {
         id: true,
         email: true,
         name: true,
+        alias: true,
         isEnabled: true,
         createdAt: true,
         updatedAt: true,
       },
       orderBy: { createdAt: 'desc' }
     });
+    const users = rows.map(u => ({ ...u, displayName: userService.userDisplayName(u) }));
     res.json(users);
   } catch (error) {
     console.error('Error fetching users:', error);

@@ -1,0 +1,19 @@
+# E2E test runner - runs BDD tests against the app
+# Used by docker-compose.e2e.yml - tests run inside Docker network
+FROM node:20-slim
+
+WORKDIR /app
+
+# Install Playwright deps for Chromium
+RUN npx playwright install chromium
+RUN npx playwright install-deps chromium
+
+COPY tests/package*.json ./
+RUN npm ci
+
+COPY tests/ .
+RUN chmod +x run-e2e.sh
+
+ENV BASE_URL=http://webapp:4000
+
+CMD ["./run-e2e.sh"]

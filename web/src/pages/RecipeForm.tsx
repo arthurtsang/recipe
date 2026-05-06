@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Box, Typography, TextField, Button, Paper } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { recipeImageSrc } from '../utils/recipeImageSrc';
 
 interface User {
   id: string;
@@ -165,20 +166,13 @@ const RecipeForm: React.FC<{ user: User | null }> = ({ user }) => {
             <Box mt={2}>
               <img 
                 src={
-                  imagePreview 
-                    ? imagePreview 
-                    : (() => {
-                        // Fix localhost URLs from backend
-                        let url = imageUrl;
-                        if (url && url.includes('localhost:8081')) {
-                          url = url.replace(/https?:\/\/localhost:8081/, window.location.origin);
-                        }
-                        // Handle external images with proxy endpoint
-                        if (url && url.startsWith('http') && !url.startsWith(window.location.origin)) {
-                          return `/api/recipes/proxy-image?url=${encodeURIComponent(url)}`;
-                        }
-                        return url;
-                      })()
+                  imagePreview
+                    ? imagePreview
+                    : recipeImageSrc(
+                        imageUrl?.includes('localhost:8081')
+                          ? imageUrl.replace(/https?:\/\/localhost:8081/, window.location.origin)
+                          : imageUrl
+                      )
                 }
                 alt="Preview" 
                 style={{ maxWidth: 200, maxHeight: 200, objectFit: 'contain', display: 'block' }} 

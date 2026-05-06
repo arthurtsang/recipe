@@ -13,6 +13,7 @@
   "loadingRecipe": "正在載入食譜...",
   "error": "錯誤",
   "noRecipesFound": "找不到食譜。",
+  "tryAdjustingSearch": "請試著調整搜尋關鍵字。",
   "recipeNotFound": "找不到該食譜。",
   "recipeDetail": "食譜詳情",
   "save": "儲存",

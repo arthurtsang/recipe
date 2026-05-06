@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import RecipeList from './pages/RecipeList';
+import HomeEntry from './pages/HomeEntry';
 import RecipeDetail from './pages/RecipeDetail';
 import RecipeForm from './pages/RecipeForm';
+import UserRecipePage from './pages/UserRecipePage';
 import ImportRecipe from './components/ImportRecipe';
 import ImportHistory from './components/ImportHistory';
 import RecipeChat from './components/RecipeChat';
@@ -10,7 +11,9 @@ import AdminUserApproval from './components/AdminUserApproval';
 import AdminQueueStatus from './components/AdminQueueStatus';
 import PendingApproval from './components/PendingApproval';
 import ManageApiToken from './components/ManageApiToken';
+import SetAliasDialog from './components/SetAliasDialog';
 import { Container, CssBaseline, AppBar, Toolbar, Typography, Button, Avatar, Menu, MenuItem, IconButton, ListItemIcon, Box, ThemeProvider, Fab } from '@mui/material';
+import PersonIcon from '@mui/icons-material/Person';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AddIcon from '@mui/icons-material/Add';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
@@ -21,11 +24,14 @@ import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import { useTranslation } from 'react-i18next';
 import i18n from './i18n';
 import { theme } from './theme';
+import { RECIPE_APP_HOME_MY_REDIRECT_ONCE_KEY } from './constants/homeRouting';
 
 interface User {
   id: string;
   name?: string;
   email: string;
+  alias?: string | null;
+  displayName?: string;
   picture?: string;
   isAdmin?: boolean;
   isEnabled?: boolean;
@@ -33,6 +39,7 @@ interface User {
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [authResolved, setAuthResolved] = useState(false);
   const location = useLocation();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -41,21 +48,36 @@ function App() {
   const [adminDialogOpen, setAdminDialogOpen] = useState(false);
   const [queueDialogOpen, setQueueDialogOpen] = useState(false);
   const [tokenDialogOpen, setTokenDialogOpen] = useState(false);
+  const [setAliasDialogOpen, setSetAliasDialogOpen] = useState(false);
   const open = Boolean(anchorEl);
   const { t } = useTranslation();
   const currentLang = i18n.language?.split('-')[0] || 'en';
   const browserLang = (navigator.language || 'en').split('-')[0];
 
   useEffect(() => {
-    fetch('/api/me', { credentials: 'include' }).then(async res => {
-      if (res.ok) {
-        const data = await res.json();
-        setUser(data); // backend now returns the user object directly
-      } else {
-        setUser(null);
-      }
-    });
+    setAuthResolved(false);
+    fetch('/api/me', { credentials: 'include' })
+      .then(async res => {
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data); // backend now returns the user object directly
+        } else {
+          setUser(null);
+        }
+      })
+      .catch(() => setUser(null))
+      .finally(() => setAuthResolved(true));
   }, [location]);
+
+  useEffect(() => {
+    if (authResolved && !user) {
+      try {
+        sessionStorage.removeItem(RECIPE_APP_HOME_MY_REDIRECT_ONCE_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [authResolved, user]);
 
   const handleAvatarClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -67,6 +89,17 @@ function App() {
   const handleLanguageChange = (lng: string) => {
     i18n.changeLanguage(lng);
     handleMenuClose();
+  };
+
+  const displayName = user ? (user.displayName || (user.alias && user.alias.trim()) || user.name || user.email) : '';
+
+  const refreshUser = () => {
+    fetch('/api/me', { credentials: 'include' }).then(async res => {
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data);
+      }
+    });
   };
 
   // Show pending approval screen if user is not enabled
@@ -131,7 +164,7 @@ function App() {
                   {t('importRecipe', 'Import')}
                 </Button>
                 <IconButton onClick={handleAvatarClick} sx={{ ml: 2 }} size="small">
-                  <Avatar alt={user.name} src={user.picture} />
+                  <Avatar alt={displayName} src={user.picture} />
                 </IconButton>
                 <Menu
                   anchorEl={anchorEl}
@@ -141,7 +174,23 @@ function App() {
                   transformOrigin={{ horizontal: 'right', vertical: 'top' }}
                   anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
                 >
-                  <MenuItem disabled>{user.name || user.email}</MenuItem>
+                  <MenuItem disabled>{displayName}</MenuItem>
+                  <MenuItem
+                    component={(user.alias && user.alias.trim()) ? Link : 'div'}
+                    to={(user.alias && user.alias.trim()) ? `/users/${user.alias.trim()}` : undefined}
+                    onClick={!(user.alias && user.alias.trim()) ? () => { setSetAliasDialogOpen(true); } : undefined}
+                  >
+                    <ListItemIcon>
+                      <PersonIcon fontSize="small" />
+                    </ListItemIcon>
+                    {(user.alias && user.alias.trim()) ? 'My recipes' : 'My recipes (set profile link)'}
+                  </MenuItem>
+                  <MenuItem onClick={() => setSetAliasDialogOpen(true)}>
+                    <ListItemIcon>
+                      <PersonIcon fontSize="small" />
+                    </ListItemIcon>
+                    {(user.alias && user.alias.trim()) ? 'Edit profile link' : 'Set profile link'}
+                  </MenuItem>
                   <MenuItem disabled>{t('language')}: {currentLang === 'zh' ? t('chinese') : t('english')}</MenuItem>
                   {/* Only allow switching if authenticated */}
                   <MenuItem
@@ -196,7 +245,8 @@ function App() {
       </AppBar>
       <Container maxWidth="lg" disableGutters sx={{ px: { xs: 1, sm: 2, md: 4 }, mt: 4 }}>
         <Routes>
-          <Route path="/" element={<RecipeList />} />
+          <Route path="/" element={<HomeEntry authResolved={authResolved} user={user} />} />
+          <Route path="/users/:alias" element={<UserRecipePage viewer={user} authResolved={authResolved} />} />
           <Route path="/recipes/new" element={<RecipeForm user={user} />} />
           <Route path="/recipes/:id/edit" element={<RecipeForm user={user} />} />
           <Route path="/recipes/:id" element={<RecipeDetail user={user} />} />
@@ -249,6 +299,16 @@ function App() {
       <ManageApiToken
         open={tokenDialogOpen}
         onClose={() => setTokenDialogOpen(false)}
+      />
+
+      <SetAliasDialog
+        open={setAliasDialogOpen}
+        onClose={() => setSetAliasDialogOpen(false)}
+        currentAlias={user?.alias ?? undefined}
+        onSuccess={(newAlias) => {
+          setUser(prev => prev ? { ...prev, alias: newAlias } : null);
+          refreshUser();
+        }}
       />
     </ThemeProvider>
   );

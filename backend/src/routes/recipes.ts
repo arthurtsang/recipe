@@ -7,6 +7,7 @@ import { requiresEnabledUser } from '../middleware/auth';
 const router = Router();
 
 router.get('/', recipeController.getAllRecipes);
+router.get('/media', recipeController.serveRecipeMedia);
 router.get('/proxy-image', recipeController.proxyImage);
 router.get('/:id', recipeController.getRecipeById);
 router.post('/', requiresAuth(), requiresEnabledUser(), recipeController.createRecipe);

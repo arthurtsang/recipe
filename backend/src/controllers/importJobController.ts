@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { normalizeRecipeImageFieldsForClient } from '../lib/recipeMedia';
 import { prisma } from '../index';
 import { 
   createImportJob, 
@@ -205,7 +206,7 @@ export async function saveImportedRecipe(req: Request, res: Response) {
         include: { user: true, currentVersion: true },
       });
       if (existing) {
-        return res.status(200).json(existing);
+        return res.status(200).json(await normalizeRecipeImageFieldsForClient(existing));
       }
     }
 
@@ -330,7 +331,10 @@ export async function saveImportedRecipe(req: Request, res: Response) {
       where: { id: created },
       include: { user: true, currentVersion: true },
     });
-    res.status(201).json(updatedRecipe);
+    if (!updatedRecipe) {
+      return res.status(500).json({ error: 'Recipe not found after save' });
+    }
+    res.status(201).json(await normalizeRecipeImageFieldsForClient(updatedRecipe));
   } catch (error) {
     console.error('Error saving imported recipe:', error);
     res.status(500).json({ error: 'Failed to save imported recipe' });

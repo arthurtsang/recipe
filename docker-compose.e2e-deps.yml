@@ -1,0 +1,37 @@
+# E2E dependencies only - run app and tests locally
+# Use this when full docker-compose.e2e.yml has OAuth networking issues (e.g. on Linux)
+#
+# Start: docker compose -f docker-compose.e2e-deps.yml up -d
+# Run app: cd backend && DATABASE_URL=postgresql://metro_user:metro_password@localhost:5434/metro_bistro \
+#   AI_SERVICE_URL=http://localhost:8001 ISSUER_BASE_URL=http://localhost:9999 \
+#   GOOGLE_CLIENT_ID=mock-client-id GOOGLE_CLIENT_SECRET=mock-oauth-secret-for-e2e \
+#   ADMIN_EMAIL=test@example.com SESSION_SECRET=e2e-secret npm run dev
+# Run mock OAuth: cd mock_oauth && npm start
+# Run tests: cd tests && BASE_URL=http://localhost:4000 npm test
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: metro_user
+      POSTGRES_PASSWORD: metro_password
+      POSTGRES_DB: metro_bistro
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U metro_user -d metro_bistro"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mock-ai:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.mock-ai
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

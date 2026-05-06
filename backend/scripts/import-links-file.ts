@@ -1,7 +1,7 @@
 /**
  * Import all recipe URLs from a file using Mabel's API token.
  * Creates import jobs via POST /api/imports/start; AI processes in background.
- * Run save-mabels-imports.ts later to save completed imports as recipes.
+ * When jobs complete, save each import as a recipe from the app (Imports) or via POST /api/imports/:jobId/save-recipe with the same Bearer token.
  *
  * Usage: npx ts-node scripts/import-links-file.ts [path/to/links.txt]
  * Default file: ../../recipe_links_Youramaryllis.txt
@@ -81,7 +81,7 @@ async function main() {
     console.log('Started 1 import job:', data.jobId);
   }
   console.log(data.message || 'Done.');
-  console.log('\nWhen jobs complete, run: npx ts-node scripts/save-mabels-imports.ts');
+  console.log('\nWhen jobs complete, save imports from the app or POST /api/imports/:jobId/save-recipe with your API token.');
 }
 
 main()

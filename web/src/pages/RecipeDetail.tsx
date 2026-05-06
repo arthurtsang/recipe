@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
 import { Paper, Typography, Box, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemButton, ListItemText, Checkbox, FormControlLabel, Rating, Alert, Slide, Link, CircularProgress } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import EditIcon from '@mui/icons-material/Edit';
@@ -9,6 +9,7 @@ import ReplayIcon from '@mui/icons-material/Replay';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
+import { recipeImageSrc } from '../utils/recipeImageSrc';
 
 interface User {
   id: string;
@@ -37,7 +38,7 @@ interface Recipe {
   estimatedTime?: string;
   difficulty?: string;
   currentVersionId?: string | null;
-  user: { id: string; name?: string; email: string };
+  user: { id: string; name?: string; email: string; alias?: string | null; displayName?: string };
   versions: Version[];
 }
 
@@ -371,18 +372,9 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   if (error) return <Typography color="error">{t('error')}: {error}</Typography>;
   if (!recipe) return <Typography>{t('recipeNotFound')}</Typography>;
 
-  // Image URL: /uploads/ -> /api/uploads/ (backend serves there), external -> proxy
   const resolveImageUrl = (raw: string | undefined): string | null => {
-    if (!raw || (typeof raw === 'string' && !raw.trim())) return null;
-    let u = raw;
-    if (u.startsWith('/uploads/')) {
-      u = `${window.location.origin}/api/uploads/${u.replace(/^\/uploads\/?/, '')}`;
-    } else if (u.includes('localhost:8081')) {
-      u = u.replace(/https?:\/\/localhost:8081/, window.location.origin);
-    } else if (u.startsWith('http') && !u.startsWith(window.location.origin)) {
-      u = `/api/recipes/proxy-image?url=${encodeURIComponent(u)}`;
-    }
-    return u;
+    const u = recipeImageSrc(raw);
+    return u ?? null;
   };
   // When editing: show preview or current edit value (empty = no image). When not editing: show selected version's image only (so switching to a version with no image hides the image).
   const displayImageUrl = isOwner && isEditing
@@ -600,7 +592,13 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
         )}
       </Box>
       <Box sx={{ fontSize: '0.9em', color: 'text.secondary', mt: 2 }}>
-        {t('by')}: {recipe.user?.name || recipe.user?.email}
+        {t('by')}: {(recipe.user?.alias && recipe.user.alias.trim()) ? (
+          <Link component={RouterLink} to={`/users/${recipe.user.alias.trim()}`} color="inherit" underline="hover">
+            {recipe.user.displayName ?? (recipe.user.alias || recipe.user.name || recipe.user.email)}
+          </Link>
+        ) : (
+          recipe.user?.alias || recipe.user?.name || recipe.user?.email
+        )}
         {recipe.sourceUrl && (
           <Box sx={{ mt: 1 }}>
             <Typography variant="body2" component="span" color="text.secondary">
