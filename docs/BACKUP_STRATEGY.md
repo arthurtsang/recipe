@@ -18,13 +18,13 @@ The database is **PostgreSQL** (typically **Supabase**). Logical backups are:
 - `DATABASE_URL` in `backend/.env` (same as the app)
 - Wasabi credentials (`.wasabi.yaml` or env; for systemd, set `WASABI_CONFIG_PATH` if the file is not next to `backend/`)
 
-### Retention
+### Retention (pruning)
 
-- **`BACKUP_RETENTION_DAYS`** (default `7`): after each successful upload, objects under the backup prefix older than this are **deleted** from Wasabi (only keys ending in `.sql.gz`).
+After each **successful** upload, the script lists `*.sql.gz` under the backup prefix, sorts by **object `LastModified`** (newest first), **keeps the newest `BACKUP_KEEP_COUNT` objects** (default **`100`**), and **deletes** the rest. Override with env, e.g. `BACKUP_KEEP_COUNT=100`.
 
 ### Scheduled backups
 
-- **Timer:** `metro-bistro-backup.timer` (example: daily)
+- **Timer:** `metro-bistro-backup.timer` — **daily at 02:00** (local system timezone), per `OnCalendar=*-*-* 02:00:00`.
 - **Service:** `metro-bistro-backup.service` → runs `npx tsx scripts/backup-db-to-wasabi.ts` as the app user (`tsangc1` in the shipped unit file).
 
 ```bash

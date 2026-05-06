@@ -7,7 +7,7 @@
  *
  * Env:
  *   WASABI_BACKUP_KEY_PREFIX — overrides yaml `backup-key-prefix` (default db-backups)
- *   BACKUP_RETENTION_DAYS — remove older objects under that prefix (default 7)
+ *   BACKUP_KEEP_COUNT — max backup objects to keep under the prefix (default 100); older .sql.gz files are deleted after each successful upload
  *   WASABI_CONFIG_PATH — path to .wasabi.yaml if not beside repo root
  *   PG_DUMP_BIN — path to pg_dump (default: search PATH)
  *   PG_DUMP_DOCKER=1 — always use Docker for pg_dump (avoids host client vs server version mismatch)
@@ -170,26 +170,33 @@ async function main() {
     const publicUrl = await uploadLocalFileToWasabi(gzPath, objectKey, guessContentType(baseName));
     console.log('Done:', publicUrl);
 
-    const retentionRaw = process.env.BACKUP_RETENTION_DAYS ?? '7';
-    const retentionDays = Number(retentionRaw);
-    if (!Number.isFinite(retentionDays) || retentionDays < 1) {
-      console.warn('BACKUP_RETENTION_DAYS invalid; skipping old backup cleanup.');
+    const keepRaw = process.env.BACKUP_KEEP_COUNT ?? '100';
+    const keepCount = Number(keepRaw);
+    if (!Number.isFinite(keepCount) || keepCount < 1) {
+      console.warn('BACKUP_KEEP_COUNT invalid; skipping backup pruning.');
       return;
     }
 
-    const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
     const listed = await listWasabiObjectsWithPrefix(`${prefix}/`);
+    const backups = listed.filter((o) => o.key.endsWith('.sql.gz'));
+    backups.sort((a, b) => {
+      const ta = a.lastModified?.getTime() ?? 0;
+      const tb = b.lastModified?.getTime() ?? 0;
+      if (tb !== ta) return tb - ta;
+      return b.key.localeCompare(a.key);
+    });
+
+    const toDelete = backups.slice(keepCount);
     let removed = 0;
-    for (const o of listed) {
-      if (!o.lastModified || !o.key.endsWith('.sql.gz')) continue;
-      if (o.key === objectKey) continue;
-      if (o.lastModified.getTime() >= cutoff) continue;
+    for (const o of toDelete) {
       await deleteWasabiKeyUnrestricted(o.key);
       removed++;
-      console.log('Removed old backup:', o.key);
+      console.log('Removed old backup (over count limit):', o.key);
     }
     if (removed === 0) {
-      console.log('No prior backups exceeded retention.');
+      console.log(`Pruning ok: ${backups.length} backup(s) total, keeping last ${keepCount}.`);
+    } else {
+      console.log(`Pruned ${removed} backup(s); keeping newest ${keepCount}.`);
     }
   } finally {
     try {
