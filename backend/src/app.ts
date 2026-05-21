@@ -368,6 +368,18 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.get('/api/cron/daily', requireCronSecret, async (_req, res) => {
+  try {
+    await processPendingImportJobs();
+    await pollProcessingImportJob();
+    await processRecipeAnalysisQueue();
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[cron] daily error:', err);
+    res.status(500).json({ error: 'Cron failed' });
+  }
+});
+
 app.get('/api/cron/import-jobs', requireCronSecret, async (_req, res) => {
   try {
     await processPendingImportJobs();

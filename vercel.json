@@ -15,7 +15,6 @@
     }
   },
   "crons": [
-    { "path": "/api/cron/import-jobs", "schedule": "*/2 * * * *" },
-    { "path": "/api/cron/recipe-analysis", "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/daily", "schedule": "0 6 * * *" }
   ]
 }

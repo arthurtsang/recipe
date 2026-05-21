@@ -6,6 +6,7 @@ import {
   getImportJob, 
   getUserImportJobs, 
   processImportJob,
+  pollProcessingImportJob,
   updateImportJobSavedRecipe
 } from '../services/importJobService';
 import { downloadAndSaveImage } from './recipeController';
@@ -100,6 +101,10 @@ export async function getImportStatus(req: Request, res: Response) {
     }
 
     const { jobId } = req.params;
+
+    // Poll AI status when the client checks progress (Hobby plan allows only daily crons).
+    await pollProcessingImportJob();
+
     const job = await getImportJob(jobId);
 
     if (!job) {
