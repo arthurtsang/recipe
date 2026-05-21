@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd backend && npm ci --omit=dev && npm run build && cd ../web && npm ci && npm run build",
+  "buildCommand": "pushd backend && npm ci --omit=dev && npm run build && popd && cd web && npm ci && npm run build",
   "outputDirectory": "web/dist",
   "rewrites": [
     { "source": "/api/:path*", "destination": "/backend/dist/index.js" },
