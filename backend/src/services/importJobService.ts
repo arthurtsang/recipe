@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { prisma } from '../index';
+import { prisma } from '../lib/prisma';
 import axios from 'axios';
 
 function isP2025(e: unknown): boolean {

@@ -2,8 +2,20 @@
   "buildCommand": "npm ci --omit=dev --prefix backend && npm run build:backend --prefix backend && npm ci --include=dev --prefix web && npm run build --prefix web",
   "outputDirectory": "web/dist",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/backend/dist/index.js" },
-    { "source": "/auth/:path*", "destination": "/backend/dist/index.js" },
-    { "source": "/uploads/:path*", "destination": "/backend/dist/index.js" }
+    { "source": "/api/:path*", "destination": "/api" },
+    { "source": "/auth/:path*", "destination": "/api" },
+    { "source": "/uploads/:path*", "destination": "/api" },
+    { "source": "/logout", "destination": "/api" },
+    { "source": "/((?!api/|auth/|uploads/|assets/).*)", "destination": "/index.html" }
+  ],
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 60,
+      "includeFiles": "backend/dist/**"
+    }
+  },
+  "crons": [
+    { "path": "/api/cron/import-jobs", "schedule": "*/2 * * * *" },
+    { "path": "/api/cron/recipe-analysis", "schedule": "*/5 * * * *" }
   ]
 }

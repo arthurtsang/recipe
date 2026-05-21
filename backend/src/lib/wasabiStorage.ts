@@ -23,79 +23,22 @@ export type WasabiConfig = {
 
 let cached: WasabiConfig | null | undefined;
 
-function parseSimpleYaml(text: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const line of text.split('\n')) {
-    const t = line.trim();
-    if (!t || t.startsWith('#')) continue;
-    const idx = t.indexOf(':');
-    if (idx === -1) continue;
-    const key = t.slice(0, idx).trim();
-    let val = t.slice(idx + 1).trim();
-    if (
-      (val.startsWith('"') && val.endsWith('"')) ||
-      (val.startsWith("'") && val.endsWith("'"))
-    ) {
-      val = val.slice(1, -1);
-    }
-    out[key] = val;
-  }
-  return out;
-}
-
-function wasabiYamlPathCandidates(): string[] {
-  const fromEnv = process.env.WASABI_CONFIG_PATH;
-  if (fromEnv) return [path.resolve(fromEnv)];
-  return [
-    path.resolve(process.cwd(), '..', '.wasabi.yaml'),
-    path.resolve(process.cwd(), '.wasabi.yaml'),
-  ];
-}
-
-function wasabiYamlPath(): string | null {
-  for (const p of wasabiYamlPathCandidates()) {
-    if (fs.existsSync(p)) return p;
-  }
-  return wasabiYamlPathCandidates()[0] ?? null;
-}
-
-function loadYamlFile(): Record<string, string> {
-  const p = wasabiYamlPath();
-  if (!p || !fs.existsSync(p)) return {};
-  return parseSimpleYaml(fs.readFileSync(p, 'utf8'));
-}
-
 export function getWasabiConfig(): WasabiConfig | null {
   if (process.env.WASABI_DISABLE === '1' || process.env.WASABI_DISABLE === 'true') {
     return null;
   }
   if (cached !== undefined) return cached;
 
-  const y = loadYamlFile();
   const accessKeyId =
-    process.env.WASABI_ACCESS_KEY_ID ||
-    process.env.AWS_ACCESS_KEY_ID ||
-    y['access-key'] ||
-    '';
+    process.env.WASABI_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || '';
   const secretAccessKey =
-    process.env.WASABI_SECRET_ACCESS_KEY ||
-    process.env.AWS_SECRET_ACCESS_KEY ||
-    y['secret-key'] ||
-    '';
-  const bucket = process.env.WASABI_BUCKET || y['bucket'] || '';
-  const region = process.env.WASABI_REGION || y['region'] || 'us-east-1';
-  const keyPrefix = (process.env.WASABI_KEY_PREFIX || y['key-prefix'] || 'recipes').replace(
-    /^\/+|\/+$/g,
-    ''
-  );
+    process.env.WASABI_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || '';
+  const bucket = process.env.WASABI_BUCKET || '';
+  const region = process.env.WASABI_REGION || 'us-east-1';
+  const keyPrefix = (process.env.WASABI_KEY_PREFIX || 'recipes').replace(/^\/+|\/+$/g, '');
   const endpoint =
-    process.env.WASABI_ENDPOINT ||
-    y['endpoint'] ||
-    `https://s3.${region}.wasabisys.com`;
-  const publicUrlBase = (process.env.WASABI_PUBLIC_URL_BASE || y['public-url-base'] || '').replace(
-    /\/+$/,
-    ''
-  );
+    process.env.WASABI_ENDPOINT || `https://s3.${region}.wasabisys.com`;
+  const publicUrlBase = (process.env.WASABI_PUBLIC_URL_BASE || '').replace(/\/+$/, '');
 
   if (!accessKeyId || !secretAccessKey || !bucket) {
     cached = null;
@@ -103,8 +46,7 @@ export function getWasabiConfig(): WasabiConfig | null {
   }
 
   const publicBase =
-    publicUrlBase ||
-    `https://${bucket}.s3.${region}.wasabisys.com`;
+    publicUrlBase || `https://${bucket}.s3.${region}.wasabisys.com`;
 
   cached = {
     accessKeyId,
@@ -122,13 +64,10 @@ export function isWasabiEnabled(): boolean {
   return getWasabiConfig() !== null;
 }
 
-/** S3 key prefix for DB dumps (same bucket as recipe images). Env overrides yaml. */
+/** S3 key prefix for DB dumps (same bucket as recipe images). */
 export function getWasabiBackupKeyPrefix(): string {
-  const y = loadYamlFile();
   const fromEnv = process.env.WASABI_BACKUP_KEY_PREFIX?.trim();
   if (fromEnv) return fromEnv.replace(/^\/+|\/+$/g, '');
-  const fromYaml = y['backup-key-prefix']?.trim();
-  if (fromYaml) return fromYaml.replace(/^\/+|\/+$/g, '');
   return 'db-backups';
 }
 
@@ -233,6 +172,25 @@ export async function wasabiPresignedGetUrl(rawKey: string, expiresInSec = 3600)
   return getSignedUrl(getClient(), cmd, { expiresIn: ttl });
 }
 
+export async function uploadBufferToWasabi(
+  body: Buffer,
+  objectKey: string,
+  contentType: string
+): Promise<string> {
+  const c = getWasabiConfig();
+  if (!c) throw new Error('Wasabi not configured');
+  const key = objectKey.replace(/^\/+/, '');
+  await getClient().send(
+    new PutObjectCommand({
+      Bucket: c.bucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    })
+  );
+  return wasabiPublicUrlForKey(key);
+}
+
 export async function uploadLocalFileToWasabi(
   localPath: string,
   objectKey: string,
@@ -240,9 +198,8 @@ export async function uploadLocalFileToWasabi(
 ): Promise<string> {
   const c = getWasabiConfig();
   if (!c) throw new Error('Wasabi not configured');
-  const client = getClient();
   const key = objectKey.replace(/^\/+/, '');
-  await client.send(
+  await getClient().send(
     new PutObjectCommand({
       Bucket: c.bucket,
       Key: key,

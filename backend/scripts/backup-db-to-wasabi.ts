@@ -1,14 +1,14 @@
 /**
  * Logical DB backup: pg_dump → gzip → upload to Wasabi (same bucket as images, prefix `db-backups/` by default).
  *
- * Requires: `pg_dump` on PATH, DATABASE_URL, Wasabi config (.wasabi.yaml or env).
+ * Requires: `pg_dump` on PATH, DATABASE_URL, Wasabi env vars (WASABI_*).
  *
  *   cd backend && npx tsx scripts/backup-db-to-wasabi.ts
  *
  * Env:
  *   WASABI_BACKUP_KEY_PREFIX — overrides yaml `backup-key-prefix` (default db-backups)
  *   BACKUP_KEEP_COUNT — max backup objects to keep under the prefix (default 100); older .sql.gz files are deleted after each successful upload
- *   WASABI_CONFIG_PATH — path to .wasabi.yaml if not beside repo root
+ *   WASABI_BACKUP_KEY_PREFIX — override default db-backups prefix
  *   PG_DUMP_BIN — path to pg_dump (default: search PATH)
  *   PG_DUMP_DOCKER=1 — always use Docker for pg_dump (avoids host client vs server version mismatch)
  *   PG_DUMP_DOCKER_IMAGE — image with pg_dump (default postgres:17-alpine)
@@ -140,7 +140,7 @@ function runPgDump(databaseUrl: string, sqlPath: string): void {
 
 async function main() {
   if (!getWasabiConfig()) {
-    console.error('Wasabi is not configured. Add .wasabi.yaml or WASABI_* env vars.');
+    console.error('Wasabi is not configured. Set WASABI_ACCESS_KEY_ID, WASABI_SECRET_ACCESS_KEY, WASABI_BUCKET, WASABI_REGION.');
     process.exit(1);
   }
 

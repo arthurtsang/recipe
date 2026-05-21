@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { normalizeRecipeImageFieldsForClient } from '../lib/recipeMedia';
-import { prisma } from '../index';
+import { prisma } from '../lib/prisma';
 import { 
   createImportJob, 
   getImportJob, 

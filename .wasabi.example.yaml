@@ -1,17 +1,16 @@
-# Copy to .wasabi.yaml (gitignored) and fill in values.
-# Or set env: WASABI_ACCESS_KEY_ID, WASABI_SECRET_ACCESS_KEY, WASABI_BUCKET, WASABI_REGION, optional WASABI_KEY_PREFIX
+# Wasabi configuration is read from environment variables (see backend/setup-env.sh).
+# Copy those vars into backend/.env or your Vercel project settings.
 #
-# Systemd/other servers: point to this file explicitly, e.g.
-#   Environment=WASABI_CONFIG_PATH=/home/you/Projects/recipe/.wasabi.yaml
-# (Also supported: file beside backend as ../.wasabi.yaml or ./.wasabi.yaml when cwd is backend.)
+# Required:
+#   WASABI_ACCESS_KEY_ID
+#   WASABI_SECRET_ACCESS_KEY
+#   WASABI_BUCKET
+#   WASABI_REGION          (default: us-east-1)
 #
-access-key: YOUR_ACCESS_KEY
-secret-key: YOUR_SECRET_KEY
-bucket: your-bucket-name
-region: us-east-1
-key-prefix: recipes
-# Logical DB dumps from backup-db-to-wasabi.ts (same bucket). Override with WASABI_BACKUP_KEY_PREFIX.
-backup-key-prefix: db-backups
-#
-# Recipe images use presigned GET URLs (browser loads directly from Wasabi).
-# Optional: WASABI_PRESIGN_EXPIRES_SEC (default 3600, min 60, max 604800)
+# Optional:
+#   WASABI_KEY_PREFIX      (default: recipes)
+#   WASABI_ENDPOINT
+#   WASABI_PUBLIC_URL_BASE
+#   WASABI_BACKUP_KEY_PREFIX (default: db-backups)
+#   WASABI_PRESIGN_EXPIRES_SEC (default: 3600)
+#   WASABI_DISABLE=1       to disable Wasabi

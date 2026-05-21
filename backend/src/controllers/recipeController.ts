@@ -15,12 +15,17 @@ import axios from 'axios';
 import {
   isWasabiEnabled,
   promoteLocalFileToWasabi,
+  uploadBufferToWasabi,
+  objectKeyForFilename,
   deleteWasabiObjectByPublicUrl,
   isWasabiPublicUrl,
   parseWasabiKeyFromPublicUrl,
   wasabiPresignedGetUrl,
   getWasabiConfig,
+  guessContentType,
 } from '../lib/wasabiStorage';
+import { getRequestOrigin } from '../lib/baseUrl';
+import { isServerless } from '../lib/serverless';
 import {
   resolveClientSideRecipeImageUrl,
   decodeObjectKeyFromMediaParam,
@@ -37,24 +42,43 @@ interface MulterRequest extends Request {
 
 const prisma = new PrismaClient();
 
-async function resolveStoredImageUrl(localPath: string, filename: string): Promise<string> {
+async function resolveStoredImageUrl(
+  file: { path?: string; buffer?: Buffer; filename: string; mimetype?: string }
+): Promise<string> {
   if (isWasabiEnabled()) {
-    return promoteLocalFileToWasabi(localPath, filename, true);
+    if (file.buffer) {
+      const key = objectKeyForFilename(file.filename);
+      return uploadBufferToWasabi(
+        file.buffer,
+        key,
+        file.mimetype || guessContentType(file.filename)
+      );
+    }
+    if (file.path) {
+      return promoteLocalFileToWasabi(file.path, file.filename, true);
+    }
+    throw new Error('No file data for Wasabi upload');
   }
-  return `/uploads/${filename}`;
+  if (isServerless()) {
+    throw new Error('Wasabi must be configured for image storage on serverless');
+  }
+  return `/uploads/${file.filename}`;
 }
 
 const uploadDir = path.resolve(process.cwd(), 'uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+if (!isServerless() && !fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-const storage = multer.diskStorage({
-  destination: (req: ExpressRequest, file: any, cb: (error: Error | null, destination: string) => void) => cb(null, uploadDir),
-  filename: (req: ExpressRequest, file: any, cb: (error: Error | null, filename: string) => void) => {
-    const ext = path.extname(file.originalname);
-    const name = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-    cb(null, name);
-  },
-});
+const useMemoryStorage = isServerless() || isWasabiEnabled();
+
+const storage = useMemoryStorage
+  ? multer.memoryStorage()
+  : multer.diskStorage({
+      destination: (_req, _file, cb) => cb(null, uploadDir),
+      filename: (_req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+      },
+    });
 
 const imageMimeTypes = [
   'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/svg+xml', 'image/avif',
@@ -74,12 +98,16 @@ export const uploadImage = upload.single('image');
 export async function uploadImageHandler(req: MulterRequest, res: Response) {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    if (isWasabiEnabled()) {
-      const url = await promoteLocalFileToWasabi(req.file.path, req.file.filename, true);
-      return res.json({ url: (await resolveClientSideRecipeImageUrl(url)) ?? url });
-    }
-    const url = `/uploads/${req.file.filename}`;
-    res.json({ url });
+    const ext = path.extname(req.file.originalname);
+    const filename =
+      req.file.filename || `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    const url = await resolveStoredImageUrl({
+      path: req.file.path,
+      buffer: req.file.buffer,
+      filename,
+      mimetype: req.file.mimetype,
+    });
+    return res.json({ url: (await resolveClientSideRecipeImageUrl(url)) ?? url });
   } catch (e) {
     console.error('uploadImageHandler', e);
     if (req.file?.path && fs.existsSync(req.file.path)) {
@@ -117,19 +145,16 @@ export async function getRecipeById(req: Request, res: Response) {
     // Rewrite /uploads/ to absolute app URL; Wasabi URLs become presigned GETs (direct to bucket)
     if (recipe.imageUrl?.startsWith('/uploads/')) {
       recipe.imageUrl = recipe.imageUrl.replace(/^\/uploads\/?/, '/api/uploads/');
-      const protocol = req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http');
-      const host = req.get('host');
-      recipe.imageUrl = `${protocol}://${host}${recipe.imageUrl}`;
+      recipe.imageUrl = `${getRequestOrigin(req)}${recipe.imageUrl}`;
     } else if (recipe.imageUrl) {
       recipe.imageUrl = (await resolveClientSideRecipeImageUrl(recipe.imageUrl)) ?? recipe.imageUrl;
     }
     if (recipe.versions?.length) {
-      const protocol = req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http');
-      const host = req.get('host');
+      const origin = getRequestOrigin(req);
       for (const v of recipe.versions) {
         if (v.imageUrl?.startsWith('/uploads/')) {
-          let u = v.imageUrl.replace(/^\/uploads\/?/, '/api/uploads/');
-          v.imageUrl = `${protocol}://${host}${u}`;
+          const u = v.imageUrl.replace(/^\/uploads\/?/, '/api/uploads/');
+          v.imageUrl = `${origin}${u}`;
         } else if (v.imageUrl) {
           v.imageUrl = (await resolveClientSideRecipeImageUrl(v.imageUrl)) ?? v.imageUrl;
         }
@@ -143,7 +168,19 @@ export async function getRecipeById(req: Request, res: Response) {
   }
 }
 
-// Function to download external image or copy local file and save to uploads
+async function resolveStoredImageFromPath(localPath: string, filename: string): Promise<string> {
+  if (isWasabiEnabled() || isServerless()) {
+    const buffer = fs.readFileSync(localPath);
+    return resolveStoredImageUrl({
+      buffer,
+      filename,
+      mimetype: guessContentType(filename),
+    });
+  }
+  return resolveStoredImageUrl({ path: localPath, filename });
+}
+
+// Function to download external image or copy local file and save to storage
 export async function downloadAndSaveImage(imageUrl: string): Promise<string> {
   if (!imageUrl || typeof imageUrl !== 'string') {
     return imageUrl ?? '';
@@ -179,7 +216,7 @@ export async function downloadAndSaveImage(imageUrl: string): Promise<string> {
       const filepath = path.join(uploadDir, filename);
       fs.copyFileSync(localPath, filepath);
       console.log(`Copied local image to ${filepath}`);
-      return await resolveStoredImageUrl(filepath, filename);
+      return await resolveStoredImageFromPath(filepath, filename);
     } catch (err) {
       console.error(`Error copying local image from ${localPath}:`, err);
       return '';
@@ -199,7 +236,7 @@ export async function downloadAndSaveImage(imageUrl: string): Promise<string> {
       const relativePath = pathMatch[1];
       const localUpload = path.join(uploadDir, path.basename(relativePath));
       if (isWasabiEnabled() && fs.existsSync(localUpload)) {
-        return await resolveStoredImageUrl(localUpload, path.basename(relativePath));
+        return await resolveStoredImageFromPath(localUpload, path.basename(relativePath));
       }
       // Never download from localhost — backend serves HTTP, so https would cause SSL error.
       // Return the local path as-is (same image URL); if file is missing, recipe keeps the path.
@@ -213,24 +250,56 @@ export async function downloadAndSaveImage(imageUrl: string): Promise<string> {
     // Generate unique filename
     const hash = crypto.createHash('md5').update(imageUrl).digest('hex');
     const filename = `recipe-${hash}.${ext}`;
-    // Fix: Save to the same directory that the static middleware serves from
+    const contentType = guessContentType(filename);
+
+    if (isWasabiEnabled() || isServerless()) {
+      const buffer = await new Promise<Buffer>((resolve, reject) => {
+        const client = url.protocol === 'https:' ? https : http;
+        const request = client.get(
+          imageUrl,
+          { timeout: 10000, rejectUnauthorized: false },
+          (response) => {
+            if (response.statusCode !== 200) {
+              console.warn(
+                `Failed to download image from ${imageUrl}: HTTP ${response.statusCode}. Using original URL.`
+              );
+              resolve(Buffer.alloc(0));
+              return;
+            }
+            const chunks: Buffer[] = [];
+            response.on('data', (chunk) => chunks.push(chunk));
+            response.on('end', () => resolve(Buffer.concat(chunks)));
+            response.on('error', reject);
+          }
+        );
+        request.on('error', reject);
+        request.setTimeout(10000, () => {
+          request.destroy();
+          reject(new Error('Download timeout'));
+        });
+      });
+      if (buffer.length === 0) return imageUrl;
+      return await resolveStoredImageUrl({
+        buffer,
+        filename,
+        mimetype: contentType,
+      });
+    }
+
     const filepath = path.join(process.cwd(), 'uploads', filename);
-    
+
     console.log(`Downloading image from ${imageUrl} to ${filepath}`);
-    
-    // Ensure uploads directory exists
+
     const uploadsDir = path.dirname(filepath);
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
 
-    // Check if file already exists
     if (fs.existsSync(filepath)) {
       console.log(`File already exists: ${filepath}`);
-      return await resolveStoredImageUrl(filepath, filename);
+      return await resolveStoredImageFromPath(filepath, filename);
     }
 
-    // Only external URLs reach here; localhost uploads are handled above and never fetched.
     const client = url.protocol === 'https:' ? https : http;
 
     return new Promise((resolve, reject) => {
@@ -242,7 +311,6 @@ export async function downloadAndSaveImage(imageUrl: string): Promise<string> {
       const request = client.get(imageUrl, requestOptions, (response) => {
         if (response.statusCode !== 200) {
           console.warn(`Failed to download image from ${imageUrl}: HTTP ${response.statusCode}. Using original URL.`);
-          // For any non-200 status, fall back to original URL instead of failing
           resolve(imageUrl);
           return;
         }
@@ -255,7 +323,7 @@ export async function downloadAndSaveImage(imageUrl: string): Promise<string> {
           console.log(`Successfully downloaded image to ${filepath}`);
           void (async () => {
             try {
-              resolve(await resolveStoredImageUrl(filepath, filename));
+              resolve(await resolveStoredImageFromPath(filepath, filename));
             } catch (err) {
               reject(err);
             }
@@ -264,7 +332,7 @@ export async function downloadAndSaveImage(imageUrl: string): Promise<string> {
 
         fileStream.on('error', (err) => {
           console.error(`Error writing file ${filepath}:`, err);
-          fs.unlink(filepath, () => {}); // Delete partial file
+          fs.unlink(filepath, () => {});
           reject(err);
         });
       });
@@ -281,7 +349,6 @@ export async function downloadAndSaveImage(imageUrl: string): Promise<string> {
     });
   } catch (error) {
     console.error('Error in downloadAndSaveImage:', error);
-    // If download fails, return original URL
     return imageUrl;
   }
 }
@@ -749,11 +816,11 @@ export async function serveRecipeMedia(req: Request, res: Response) {
   try {
     if (!isWasabiEnabled()) {
       console.warn(
-        '[serveRecipeMedia] Wasabi not configured — set WASABI_* env vars or WASABI_CONFIG_PATH / .wasabi.yaml'
+        '[serveRecipeMedia] Wasabi not configured — set WASABI_ACCESS_KEY_ID, WASABI_SECRET_ACCESS_KEY, WASABI_BUCKET, and WASABI_REGION'
       );
       return res.status(503).json({
         error: 'Object storage is not configured',
-        hint: 'Set WASABI_ACCESS_KEY_ID, WASABI_SECRET_ACCESS_KEY, WASABI_BUCKET, WASABI_REGION (or use .wasabi.yaml). On systemd, copy the file to the server or inject env in the service unit.',
+        hint: 'Set WASABI_ACCESS_KEY_ID, WASABI_SECRET_ACCESS_KEY, WASABI_BUCKET, WASABI_REGION (and optional WASABI_KEY_PREFIX, WASABI_ENDPOINT, WASABI_PUBLIC_URL_BASE).',
       });
     }
     const k = typeof req.query.k === 'string' ? req.query.k : '';

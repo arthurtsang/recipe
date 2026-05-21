@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // Middleware to check if user is enabled (avoids circular dependency with index)
 export const requiresEnabledUser = () => {
