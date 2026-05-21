@@ -5,10 +5,15 @@
 echo "Setting up Metro Bistro Backend environment template..."
 
 cat > .env << 'EOF'
-# Database — use Supabase Session pooler on Vercel (NOT the direct db.*.supabase.co host).
-# Direct connections exhaust Supabase limits under serverless; use pooler with encoded password.
-# Example (Session pooler, port 5432):
-# DATABASE_URL="postgresql://postgres.xnaggwecqxmbqhcgynge:URL_ENCODED_PASSWORD@aws-1-us-west-2.pooler.supabase.com:5432/postgres?sslmode=require&connection_limit=1"
+# Database — Supabase on Vercel needs the pooler, not the direct db.*.supabase.co host.
+#
+# Runtime (Vercel / Prisma queries) — Transaction pooler, port 6543:
+# DATABASE_URL="postgresql://postgres.xnaggwecqxmbqhcgynge:URL_ENCODED_PASSWORD@aws-1-us-west-2.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require"
+#
+# Migrations (build / prisma migrate) — Session pooler, port 5432, or direct host:
+# DIRECT_DATABASE_URL="postgresql://postgres.xnaggwecqxmbqhcgynge:URL_ENCODED_PASSWORD@aws-1-us-west-2.pooler.supabase.com:5432/postgres?sslmode=require"
+#
+# Local dev — one URL is fine:
 DATABASE_URL="postgresql://USER:URL_ENCODED_PASSWORD@HOST:5432/postgres?sslmode=require"
 
 # Server Configuration
