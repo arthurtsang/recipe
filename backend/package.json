@@ -4,6 +4,7 @@
   "description": "Metro Bistro Recipe Management Backend",
   "main": "index.js",
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "npm run build && concurrently \"npm run dev:backend\" \"npm run dev:ui\"",
     "dev:backend": "nodemon --watch src --watch prisma --ext ts --exec \"npm run build && node dist/index.js\"",
     "dev:ui": "chokidar \"../web/src/**/*\" -c \"cd ../web && npm run build\"",
@@ -32,6 +33,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.1",
     "pg": "^8.16.3",
+    "prisma": "^6.19.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.8.3"
   },
@@ -41,7 +43,6 @@
     "chokidar-cli": "^3.0.0",
     "concurrently": "^9.2.0",
     "nodemon": "^3.1.10",
-    "prisma": "^6.19.2",
     "tsx": "^4.20.3"
   }
 }
