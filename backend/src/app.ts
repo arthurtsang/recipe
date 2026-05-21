@@ -369,8 +369,14 @@ app.post('/api/admin/import-jobs/:id/retry', requiresAuth(), requiresAdmin(), as
   }
 });
 
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok' });
+app.get('/api/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', db: 'ok' });
+  } catch (err: any) {
+    console.error('/api/health db check failed:', err?.message ?? err);
+    res.status(503).json({ status: 'degraded', db: 'error', error: err?.message ?? 'Database unavailable' });
+  }
 });
 
 app.get('/api/cron/daily', requireCronSecret, async (_req, res) => {

@@ -5,8 +5,11 @@
 echo "Setting up Metro Bistro Backend environment template..."
 
 cat > .env << 'EOF'
-# Database — use your Supabase / Postgres URL (Session mode or direct).
-DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/postgres?sslmode=require"
+# Database — use Supabase Session pooler on Vercel (NOT the direct db.*.supabase.co host).
+# Direct connections exhaust Supabase limits under serverless; use pooler with encoded password.
+# Example (Session pooler, port 5432):
+# DATABASE_URL="postgresql://postgres.xnaggwecqxmbqhcgynge:URL_ENCODED_PASSWORD@aws-1-us-west-2.pooler.supabase.com:5432/postgres?sslmode=require&connection_limit=1"
+DATABASE_URL="postgresql://USER:URL_ENCODED_PASSWORD@HOST:5432/postgres?sslmode=require"
 
 # Server Configuration
 PORT=4000

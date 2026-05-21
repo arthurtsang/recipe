@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 /** Sanitize a string for use as alias: lowercase, alphanumeric and hyphens only. */
 function sanitizeAlias(s: string): string {

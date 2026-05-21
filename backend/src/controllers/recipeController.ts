@@ -10,7 +10,7 @@ import * as recipeService from '../services/recipeService';
 import * as userService from '../services/userService';
 import type { FileFilterCallback } from 'multer';
 import type { Request as ExpressRequest } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import axios from 'axios';
 import {
   isWasabiEnabled,
@@ -39,8 +39,6 @@ import {
 interface MulterRequest extends Request {
   file?: any;
 }
-
-const prisma = new PrismaClient();
 
 async function resolveStoredImageUrl(
   file: { path?: string; buffer?: Buffer; filename: string; mimetype?: string }

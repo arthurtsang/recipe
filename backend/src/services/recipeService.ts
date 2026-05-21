@@ -1,7 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { userDisplayName } from './userService';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 export async function getAllPublicRecipes(q?: string, page: number = 1, limit: number = 12) {
   const where: any = { isPublic: true };
