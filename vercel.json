@@ -1,9 +1,9 @@
 {
+  "buildCommand": "cd backend && npm ci --omit=dev && npm run build && cd ../web && npm ci --omit=dev && npm run build",
+  "outputDirectory": "web/dist",
   "rewrites": [
     { "source": "/api/:path*", "destination": "/backend/dist/index.js" },
     { "source": "/auth/:path*", "destination": "/backend/dist/index.js" },
     { "source": "/uploads/:path*", "destination": "/backend/dist/index.js" }
-  ],
-  "buildCommand": "npm run build --prefix backend && npm run build --prefix web",
-  "outputDirectory": "web/dist"
+  ]
 }
