@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm ci --omit=dev --prefix backend && npm run build:backend --prefix backend && npm ci --include=dev --prefix web && npm run build --prefix web",
+  "buildCommand": "npm ci --omit=dev --prefix backend && npm run migrate:deploy --prefix backend && npm run build:backend --prefix backend && npm ci --include=dev --prefix web && npm run build --prefix web",
   "outputDirectory": "web/dist",
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api" },

@@ -9,6 +9,7 @@
     "dev:backend": "nodemon --watch src --watch prisma --ext ts --exec \"npm run build && node dist/index.js\"",
     "dev:ui": "chokidar \"../web/src/**/*\" -c \"cd ../web && npm run build\"",
     "build:backend": "tsc -b",
+    "migrate:deploy": "prisma migrate deploy",
     "build:ui": "cd ../web && npm install && npm run build",
     "build": "npm run build:backend && npm run build:ui",
     "redownload-images": "ts-node scripts/redownload-images.ts"
