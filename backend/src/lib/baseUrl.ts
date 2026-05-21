@@ -1,11 +1,18 @@
 import type { Request } from 'express';
 
+import { env } from './env';
+
 /** Public app URL — set BASE_URL in env (e.g. https://recipe.example.com). */
 export function getBaseUrl(): string {
-  const fromEnv = process.env.BASE_URL?.trim();
+  const fromEnv = env('BASE_URL');
   if (fromEnv) return fromEnv.replace(/\/+$/, '');
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL.replace(/^https?:\/\//, '')}`;
+  const vercelProduction = env('VERCEL_PROJECT_PRODUCTION_URL');
+  if (vercelProduction) {
+    return `https://${vercelProduction.replace(/^https?:\/\//, '')}`;
+  }
+  const vercelUrl = env('VERCEL_URL');
+  if (vercelUrl) {
+    return `https://${vercelUrl.replace(/^https?:\/\//, '')}`;
   }
   return 'http://localhost:4000';
 }

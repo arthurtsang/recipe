@@ -17,12 +17,17 @@ import {
 import { findRecipesNeedingAnalysis, processRecipeAnalysisQueue } from './services/recipeAnalysisService';
 import { prisma } from './lib/prisma';
 import { corsOrigins, getBaseUrl, isProductionDeploy } from './lib/baseUrl';
+import { env, requireEnv } from './lib/env';
 import { isServerless } from './lib/serverless';
 import { requiresEnabledUser, requiresAdmin } from './middleware/auth';
 import { requireCronSecret } from './middleware/cronAuth';
 import importJobRoutes from './routes/importJobs';
 
-dotenv.config();
+dotenv.config({ path: path.join(__dirname, '../.env') });
+
+const googleClientId = requireEnv('GOOGLE_CLIENT_ID');
+const googleClientSecret = requireEnv('GOOGLE_CLIENT_SECRET');
+const sessionSecret = env('SESSION_SECRET') ?? 'dev-secret';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -47,9 +52,9 @@ app.use(
   auth({
     issuerBaseURL: 'https://accounts.google.com',
     baseURL: baseUrl,
-    clientID: process.env.GOOGLE_CLIENT_ID!,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    secret: process.env.SESSION_SECRET || 'dev-secret',
+    clientID: googleClientId,
+    clientSecret: googleClientSecret,
+    secret: sessionSecret,
     idpLogout: false,
     authRequired: false,
     session: {
