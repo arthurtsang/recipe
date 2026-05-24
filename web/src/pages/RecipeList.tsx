@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import RecipeCard from '../components/RecipeCard';
+import RecipeListItem from '../components/RecipeListItem';
 import { Typography, Box, TextField, Button, Container, CircularProgress } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { useRecipeLayout } from '../context/RecipeLayoutContext';
 
 // Define a Recipe type for better type safety
 interface Recipe {
@@ -23,6 +25,7 @@ interface Recipe {
 
 export default function RecipeList() {
   const { t } = useTranslation();
+  const { layout } = useRecipeLayout();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -180,6 +183,14 @@ export default function RecipeList() {
             <Typography variant="body1" color="text.secondary">
               Try adjusting your search terms or browse our collection.
             </Typography>
+          </Box>
+        ) : layout === 'list' ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, width: '100%' }}>
+            {recipes.map((recipe, i) => (
+              <div key={recipe.id} ref={i === recipes.length - 1 ? lastRecipeRef : undefined}>
+                <RecipeListItem recipe={recipe} showAuthor />
+              </div>
+            ))}
           </Box>
         ) : (
           <Box

@@ -10,8 +10,8 @@ import RecipeChat from './components/RecipeChat';
 import AdminUserApproval from './components/AdminUserApproval';
 import AdminQueueStatus from './components/AdminQueueStatus';
 import PendingApproval from './components/PendingApproval';
-import ManageApiToken from './components/ManageApiToken';
-import SetAliasDialog from './components/SetAliasDialog';
+import SettingsDialog from './components/SettingsDialog';
+import { RecipeLayoutProvider } from './context/RecipeLayoutContext';
 import { Container, CssBaseline, AppBar, Toolbar, Typography, Button, Avatar, Menu, MenuItem, IconButton, ListItemIcon, Box, ThemeProvider, Fab } from '@mui/material';
 import PersonIcon from '@mui/icons-material/Person';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -20,9 +20,8 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import ChatIcon from '@mui/icons-material/Chat';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import QueueIcon from '@mui/icons-material/Queue';
-import VpnKeyIcon from '@mui/icons-material/VpnKey';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { useTranslation } from 'react-i18next';
-import i18n from './i18n';
 import { theme } from './theme';
 import { RECIPE_APP_HOME_MY_REDIRECT_ONCE_KEY } from './constants/homeRouting';
 
@@ -47,12 +46,9 @@ function App() {
   const [chatOpen, setChatOpen] = useState(false);
   const [adminDialogOpen, setAdminDialogOpen] = useState(false);
   const [queueDialogOpen, setQueueDialogOpen] = useState(false);
-  const [tokenDialogOpen, setTokenDialogOpen] = useState(false);
-  const [setAliasDialogOpen, setSetAliasDialogOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const open = Boolean(anchorEl);
   const { t } = useTranslation();
-  const currentLang = i18n.language?.split('-')[0] || 'en';
-  const browserLang = (navigator.language || 'en').split('-')[0];
 
   useEffect(() => {
     setAuthResolved(false);
@@ -84,11 +80,6 @@ function App() {
   };
   const handleMenuClose = () => {
     setAnchorEl(null);
-  };
-
-  const handleLanguageChange = (lng: string) => {
-    i18n.changeLanguage(lng);
-    handleMenuClose();
   };
 
   const displayName = user ? (user.displayName || (user.alias && user.alias.trim()) || user.name || user.email) : '';
@@ -178,38 +169,24 @@ function App() {
                   <MenuItem
                     component={(user.alias && user.alias.trim()) ? Link : 'div'}
                     to={(user.alias && user.alias.trim()) ? `/users/${user.alias.trim()}` : undefined}
-                    onClick={!(user.alias && user.alias.trim()) ? () => { setSetAliasDialogOpen(true); } : undefined}
+                    onClick={!(user.alias && user.alias.trim()) ? () => { setSettingsOpen(true); } : undefined}
                   >
                     <ListItemIcon>
                       <PersonIcon fontSize="small" />
                     </ListItemIcon>
-                    {(user.alias && user.alias.trim()) ? 'My recipes' : 'My recipes (set profile link)'}
+                    {(user.alias && user.alias.trim()) ? t('myRecipes') : t('myRecipesSetProfile')}
                   </MenuItem>
-                  <MenuItem onClick={() => setSetAliasDialogOpen(true)}>
+                  <MenuItem onClick={() => setSettingsOpen(true)}>
                     <ListItemIcon>
-                      <PersonIcon fontSize="small" />
+                      <SettingsIcon fontSize="small" />
                     </ListItemIcon>
-                    {(user.alias && user.alias.trim()) ? 'Edit profile link' : 'Set profile link'}
-                  </MenuItem>
-                  <MenuItem disabled>{t('language')}: {currentLang === 'zh' ? t('chinese') : t('english')}</MenuItem>
-                  {/* Only allow switching if authenticated */}
-                  <MenuItem
-                    onClick={() => handleLanguageChange(currentLang === 'en' ? 'zh' : 'en')}
-                    disabled={currentLang !== browserLang && !user}
-                  >
-                    {currentLang === 'en' ? t('chinese') : t('english')}
+                    {t('settings')}
                   </MenuItem>
                   <MenuItem onClick={() => setImportHistoryOpen(true)}>
                     <ListItemIcon>
                       <FileDownloadIcon fontSize="small" />
                     </ListItemIcon>
-                    Import History
-                  </MenuItem>
-                  <MenuItem onClick={() => setTokenDialogOpen(true)}>
-                    <ListItemIcon>
-                      <VpnKeyIcon fontSize="small" />
-                    </ListItemIcon>
-                    Manage API Token
+                    {t('importHistory')}
                   </MenuItem>
                   {user.isAdmin && (
                     <>
@@ -296,16 +273,11 @@ function App() {
         onClose={() => setQueueDialogOpen(false)}
       />
       
-      <ManageApiToken
-        open={tokenDialogOpen}
-        onClose={() => setTokenDialogOpen(false)}
-      />
-
-      <SetAliasDialog
-        open={setAliasDialogOpen}
-        onClose={() => setSetAliasDialogOpen(false)}
+      <SettingsDialog
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
         currentAlias={user?.alias ?? undefined}
-        onSuccess={(newAlias) => {
+        onAliasSuccess={(newAlias) => {
           setUser(prev => prev ? { ...prev, alias: newAlias } : null);
           refreshUser();
         }}
@@ -317,7 +289,9 @@ function App() {
 export default function AppWithRouter() {
   return (
     <BrowserRouter>
-      <App />
+      <RecipeLayoutProvider>
+        <App />
+      </RecipeLayoutProvider>
     </BrowserRouter>
   );
 }

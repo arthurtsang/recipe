@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import RecipeCard from '../components/RecipeCard';
+import RecipeListItem from '../components/RecipeListItem';
 import { Typography, Box, Button, Container, CircularProgress, TextField } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import RestaurantIcon from '@mui/icons-material/Restaurant';
 import { useTranslation } from 'react-i18next';
+import { useRecipeLayout } from '../context/RecipeLayoutContext';
 import { RECIPE_APP_HOME_MY_REDIRECT_ONCE_KEY, type RecipeAppHomeLandingState } from '../constants/homeRouting';
 
 interface User {
@@ -51,6 +53,7 @@ export default function UserRecipePage({
 }: UserRecipePageProps) {
   const { alias } = useParams<{ alias: string }>();
   const { t } = useTranslation();
+  const { layout } = useRecipeLayout();
   const location = useLocation();
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
@@ -217,6 +220,12 @@ export default function UserRecipePage({
             <Typography variant="body1" color="text.secondary">
               {t('tryAdjustingSearch')}
             </Typography>
+          </Box>
+        ) : layout === 'list' ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, width: '100%' }}>
+            {filteredRecipes.map(recipe => (
+              <RecipeListItem key={recipe.id} recipe={recipe} showAuthor={false} />
+            ))}
           </Box>
         ) : (
           <Box
