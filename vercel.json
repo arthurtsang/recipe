@@ -9,10 +9,15 @@
     { "source": "/((?!api/|auth/|uploads/|assets/).*)", "destination": "/index.html" }
   ],
   "functions": {
-    "api/index.js": {
-      "maxDuration": 300,
-      "includeFiles": ["backend/dist/**", "backend/bin/**"]
-    }
+    "api/index.js": [
+      {
+        "maxDuration": 300,
+        "includeFiles": "backend/dist/**"
+      },
+      {
+        "includeFiles": "backend/bin/**"
+      }
+    ]
   },
   "crons": [
     { "path": "/api/cron/daily", "schedule": "0 6 * * *" },
