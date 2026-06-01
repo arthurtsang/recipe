@@ -110,9 +110,11 @@ export function runPgDump(databaseUrl: string, sqlPath: string): void {
   const version = spawnSync(bin, ['--version'], { encoding: 'utf8' });
   if (version.status !== 0) {
     const hint = isServerless()
-      ? 'Bundled pg_dump missing — ensure install-pg-dump-for-vercel.sh ran at build time.'
+      ? 'pg_dump binary is present but cannot run (missing libpq.so.5 etc. in Vercel runtime). ' +
+        'Backups are not currently supported on the Vercel deployment. ' +
+        'Run backups from a machine with postgresql-client installed (or use PG_DUMP_DOCKER=1 + Docker).'
       : 'Install postgresql-client, set PG_DUMP_BIN, or PG_DUMP_DOCKER=1 with Docker.';
-    throw new Error(`${bin} not found. ${hint}`);
+    throw new Error(`${bin} failed to execute. ${hint}`);
   }
 
   console.log('[backup] Running pg_dump with', bin);

@@ -422,7 +422,11 @@ app.get('/api/cron/backup', requireCronSecret, async (_req, res) => {
     res.json({ ok: true, ...result });
   } catch (err) {
     console.error('[cron] backup error:', err);
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Backup failed' });
+    const msg = err instanceof Error ? err.message : 'Backup failed';
+    res.status(500).json({
+      error: msg,
+      hint: 'DB backups currently require a working pg_dump binary. See install-pg-dump-for-vercel.sh and BACKUP_STRATEGY.md',
+    });
   }
 });
 
