@@ -38,7 +38,7 @@ function backupTimestamp(): string {
 }
 
 function bundledPgDumpPath(): string {
-  return join(__dirname, '../../bin/pg_dump');
+  return join(__dirname, '../bin/pg_dump');
 }
 
 function pgDumpBin(): string {

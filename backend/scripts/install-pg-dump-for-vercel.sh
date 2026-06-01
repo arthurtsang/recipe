@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BIN_DIR="$ROOT/bin"
+BIN_DIR="$ROOT/dist/bin"
 PG_DUMP="$BIN_DIR/pg_dump"
 
 if [ -x "$PG_DUMP" ]; then
