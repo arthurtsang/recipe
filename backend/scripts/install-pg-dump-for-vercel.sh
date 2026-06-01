@@ -58,9 +58,11 @@ if "$PG_DUMP" --version 2>&1; then
   echo "[install-pg-dump] Installed successfully to $PG_DUMP"
 else
   echo ""
-  echo "=== BINARY DIAGNOSTICS (this is why it failed) ==="
+  echo "!!! WARNING: Bundled pg_dump binary is not executable in this environment !!!"
+  echo ""
+  echo "=== BINARY DIAGNOSTICS ==="
   echo "Binary: $PG_DUMP"
-  echo "Variant: $VARIANT (PG_VERSION=$PG_VERSION)"
+  echo "Variant attempted: $VARIANT (PG_VERSION=$PG_VERSION)"
   echo ""
   echo "--- file output ---"
   file "$PG_DUMP" || true
@@ -71,14 +73,28 @@ else
   echo "--- ldd -v (detailed) ---"
   ldd -v "$PG_DUMP" 2>&1 || true
   echo ""
-  echo "--- readelf -d (direct shared object dependencies) ---"
+  echo "--- readelf -d ---"
   readelf -d "$PG_DUMP" 2>&1 || true
   echo ""
   echo "=== END DIAGNOSTICS ==="
   echo ""
-  echo "The binary could not execute in this environment."
-  echo "Most common cause: missing libpq.so.5 or other Postgres shared libraries."
-  echo "Try setting PG_DUMP_MUSL=0 and PG_DUMP_GLIBC=1 to test the glibc build,"
-  echo "or consider using PG_DUMP_DOCKER=1 at runtime instead of a bundled binary."
-  exit 1
+  echo "This is expected on Vercel because the prebuilt pg_dump binaries require"
+  echo "libpq.so.5 + related Postgres client libraries that are not present in the"
+  echo "Vercel build / serverless runtime image."
+  echo ""
+  echo "Consequence:"
+  echo "  - The main API, image uploads, recipes, etc. will deploy and work normally."
+  echo "  - The /api/cron/backup endpoint (and local backup script) will fail at runtime"
+  echo "    with a clear error until a working pg_dump solution is provided."
+  echo ""
+  echo "To make backups work you have a few realistic options:"
+  echo "  1. Run the backup job from a different environment that has postgresql-client"
+  echo "     (e.g. a small Fly.io / Railway / VPS machine with the timer service)."
+  echo "  2. Set PG_DUMP_DOCKER=1 and run backups from a host that has Docker."
+  echo "  3. Contribute a fully static pg_dump binary + all required .so files."
+  echo ""
+  echo "Continuing build without a working pg_dump (this is not fatal)."
+  echo ""
+  # Do NOT exit 1 — the backup tool is optional for the main application.
+  # The cron backup will simply fail at runtime with a good error message.
 fi
