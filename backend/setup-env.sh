@@ -50,6 +50,9 @@ WASABI_KEY_PREFIX="recipes"
 # WASABI_BACKUP_KEY_PREFIX="db-backups"
 # WASABI_PRESIGN_EXPIRES_SEC="3600"
 
+# Direct/session Postgres URL for pg_dump backups (Vercel cron). Not the transaction pooler (6543).
+# DIRECT_DATABASE_URL="postgresql://...@....pooler.supabase.com:5432/postgres?sslmode=require"
+
 # Vercel Cron auth (set in Vercel project env; crons send Authorization: Bearer <CRON_SECRET>)
 CRON_SECRET=""
 EOF

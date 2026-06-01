@@ -12,6 +12,7 @@ __pycache__/
 
 # Build outputs
 backend/dist/
+backend/bin/
 web/dist/
 *.tsbuildinfo
 

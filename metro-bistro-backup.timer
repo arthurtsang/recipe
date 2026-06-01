@@ -1,5 +1,5 @@
 [Unit]
-Description=Run Metro Bistro backup daily at 2 AM
+Description=Run Metro Bistro backup daily at 2 AM (legacy — use Vercel cron /api/cron/backup in production)
 Requires=metro-bistro-backup.service
 
 [Timer]

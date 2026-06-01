@@ -65,6 +65,32 @@ export function getMigrateDatabaseUrl(): string {
   return u.toString();
 }
 
+/** pg_dump needs a direct/session connection — not the transaction pooler (6543). */
+export function getBackupDatabaseUrl(): string {
+  const raw = env('DIRECT_DATABASE_URL') || env('DATABASE_URL');
+  if (!raw) {
+    throw new Error('[db] DATABASE_URL is not set');
+  }
+
+  const u = parseDatabaseUrl(raw);
+
+  if (u.port === '6543') {
+    throw new Error(
+      '[backup] pg_dump cannot use transaction pooler (port 6543). Set DIRECT_DATABASE_URL to session pooler (5432) or direct db host.'
+    );
+  }
+
+  u.searchParams.delete('pgbouncer');
+  u.searchParams.delete('connection_limit');
+  u.searchParams.delete('pool_timeout');
+
+  if (!u.searchParams.has('sslmode')) {
+    u.searchParams.set('sslmode', 'require');
+  }
+
+  return u.toString();
+}
+
 export function warnDatabaseUrlConfig(): void {
   const raw = env('DATABASE_URL');
   if (!raw) {

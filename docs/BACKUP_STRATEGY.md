@@ -24,12 +24,25 @@ After each **successful** upload, the script lists `*.sql.gz` under the backup p
 
 ### Scheduled backups
 
-- **Timer:** `metro-bistro-backup.timer` — **daily at 02:00** (local system timezone), per `OnCalendar=*-*-* 02:00:00`.
-- **Service:** `metro-bistro-backup.service` → runs `npx tsx scripts/backup-db-to-wasabi.ts` as the app user (`tsangc1` in the shipped unit file).
+**Production (Vercel):** daily at **02:00 UTC** via `vercel.json` → `GET /api/cron/backup`. Vercel sends `Authorization: Bearer <CRON_SECRET>` automatically when `CRON_SECRET` is set on the project. The build installs a Linux `pg_dump` binary (`backend/scripts/install-pg-dump-for-vercel.sh`); backups use **`DIRECT_DATABASE_URL`** (session pooler port 5432 or direct host — not transaction pooler 6543).
+
+Disable the old host timer after Vercel cron is verified:
+
+```bash
+sudo systemctl disable --now metro-bistro-backup.timer
+```
+
+**Legacy (systemd on a host):** `metro-bistro-backup.timer` — daily at 02:00 local time. Prefer Vercel cron when deployed on Vercel.
 
 ```bash
 sudo systemctl status metro-bistro-backup.timer
 sudo journalctl -u metro-bistro-backup.service --since "24 hours ago"
+```
+
+Check Vercel cron logs in the project **Logs** tab (filter `/api/cron/backup`) or trigger manually:
+
+```bash
+curl -sS -H "Authorization: Bearer $CRON_SECRET" "https://YOUR_APP.vercel.app/api/cron/backup"
 ```
 
 ### Manual backup
