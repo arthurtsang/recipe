@@ -15,6 +15,7 @@ import {
   pollProcessingImportJob,
 } from './services/importJobService';
 import { findRecipesNeedingAnalysis, processRecipeAnalysisQueue } from './services/recipeAnalysisService';
+import { backupDatabaseToWasabi } from './services/databaseBackupService';
 import { prisma } from './lib/prisma';
 import { corsOrigins, getBaseUrl, isProductionDeploy } from './lib/baseUrl';
 import { env, requireEnv } from './lib/env';
@@ -44,7 +45,10 @@ app.use(
   })
 );
 
-app.use(express.json());
+// Increase body size limit for recipe updates with images (base64 can be large)
+// Vercel has a 4.5MB payload limit for serverless functions
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 const baseUrl = getBaseUrl();
 
@@ -409,6 +413,16 @@ app.get('/api/cron/recipe-analysis', requireCronSecret, async (_req, res) => {
   } catch (err) {
     console.error('[cron] recipe-analysis error:', err);
     res.status(500).json({ error: 'Cron failed' });
+  }
+});
+
+app.get('/api/cron/backup', requireCronSecret, async (_req, res) => {
+  try {
+    const result = await backupDatabaseToWasabi();
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('[cron] backup error:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Backup failed' });
   }
 });
 
