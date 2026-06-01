@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # Install a Linux pg_dump binary for Vercel serverless backups (no apt on Vercel).
+#
+# Source: https://github.com/theseus-rs/postgresql-binaries (public GitHub releases)
+# These are full PostgreSQL client binaries for glibc-based Linux (Vercel uses glibc).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -21,14 +24,16 @@ mkdir -p "$BIN_DIR"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-PG_VERSION="${PG_DUMP_VERSION:-17.4}"
-TARBALL="postgresql-${PG_VERSION}-1-linux-x64-binaries.tar.gz"
-URL="https://get.enterprisedb.com/postgresql/${TARBALL}"
+PG_VERSION="${PG_DUMP_VERSION:-17.5.0}"
+TARBALL="postgresql-${PG_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+URL="https://github.com/theseus-rs/postgresql-binaries/releases/download/${PG_VERSION}/${TARBALL}"
 
-echo "[install-pg-dump] Downloading PostgreSQL ${PG_VERSION} client from EDB..."
-curl -fsSL "$URL" -o "$TMP/$TARBALL"
+echo "[install-pg-dump] Downloading PostgreSQL ${PG_VERSION} client from theseus-rs/postgresql-binaries..."
+curl -fsSL --retry 3 --retry-delay 2 --retry-max-time 30 "$URL" -o "$TMP/$TARBALL"
 tar -xzf "$TMP/$TARBALL" -C "$TMP"
-cp "$TMP/pgsql/bin/pg_dump" "$PG_DUMP"
+
+INNER_DIR="postgresql-${PG_VERSION}-x86_64-unknown-linux-gnu"
+cp "$TMP/$INNER_DIR/bin/pg_dump" "$PG_DUMP"
 chmod +x "$PG_DUMP"
 "$PG_DUMP" --version
 echo "[install-pg-dump] Installed to $PG_DUMP"
