@@ -95,7 +95,7 @@ export async function analyzeRecipeWithAI(recipeId: string): Promise<RecipeAnaly
       return null;
     }
 
-    if (recipe.estimatedTime || recipe.difficulty) {
+    if (!needsMetadata(recipe.estimatedTime, recipe.difficulty)) {
       console.log(`[recipe-analysis] Recipe ${recipeId} already has metadata, skipping`);
       return null;
     }
@@ -144,14 +144,38 @@ export async function analyzeRecipeWithAI(recipeId: string): Promise<RecipeAnaly
   }
 }
 
+function isPlaceholderTime(value: string | null | undefined): boolean {
+  if (value == null || !String(value).trim()) return true;
+  const v = String(value).trim().toLowerCase();
+  return v === 'pending...' || v === 'pending' || v === 'unknown' || v === 'n/a';
+}
+
+function isPlaceholderDifficulty(value: string | null | undefined): boolean {
+  if (value == null || !String(value).trim()) return true;
+  const v = String(value).trim().toLowerCase();
+  return v === 'undetermined' || v === 'unknown' || v === 'n/a';
+}
+
+/** True when either field is missing or still a legacy placeholder from import. */
+function needsMetadata(
+  estimatedTime: string | null | undefined,
+  difficulty: string | null | undefined
+): boolean {
+  return isPlaceholderTime(estimatedTime) || isPlaceholderDifficulty(difficulty);
+}
+
 export async function findRecipesNeedingAnalysis(limit: number = 10): Promise<string[]> {
   try {
+    // Import now fills real time/difficulty in one NVIDIA call; this queue is a
+    // fallback for older rows that still have null / Pending... / Undetermined.
     const recipes = await prisma.recipe.findMany({
       where: {
-        AND: [
+        currentVersionId: { not: null },
+        OR: [
           { estimatedTime: null },
           { difficulty: null },
-          { currentVersionId: { not: null } },
+          { estimatedTime: { in: ['Pending...', 'Pending', 'pending...', 'pending'] } },
+          { difficulty: { in: ['Undetermined', 'undetermined'] } },
         ],
       },
       select: { id: true },

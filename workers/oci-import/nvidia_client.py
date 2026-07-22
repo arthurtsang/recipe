@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import logging
 import os
+import re
+
 import httpx
 
 NVIDIA_BASE = "https://integrate.api.nvidia.com/v1"
+logger = logging.getLogger(__name__)
+
+DIFFICULTIES = ("Easy", "Medium", "Advanced")
 
 
 def chat(prompt: str, *, temperature: float = 0.3, max_tokens: int = 2048) -> str:
@@ -31,74 +37,256 @@ def chat(prompt: str, *, temperature: float = 0.3, max_tokens: int = 2048) -> st
     return content.strip()
 
 
-def extract_recipe_from_page_text(visible_text: str) -> dict:
+def _is_generic_title(title: str) -> bool:
+    t = (title or "").strip()
+    if not t:
+        return True
+    if re.match(r"^(Video by|Untitled|Instagram)\b", t, re.I):
+        return True
+    if re.search(r"\bVideo by\s+\S+", t, re.I):
+        return True
+    return False
+
+
+def _fix_generic_title(video_title: str, llm_title: str, llm_description: str) -> tuple[str, str]:
+    """Prefer a real recipe title over generic Instagram/YouTube titles like 'Video by X'."""
+    title = (llm_title or "").strip()
+    desc = (llm_description or "").strip()
+    if not _is_generic_title(title):
+        return title or video_title or "Untitled", desc
+
+    if desc and len(desc) <= 120 and "\n" not in desc and not _description_looks_like_dump(desc, title):
+        logger.info("Title from short description: %r -> %r", title, desc[:60])
+        return desc, ""
+
+    if desc:
+        first_line = desc.split("\n")[0].strip()
+        if "." in first_line:
+            candidate = first_line.split(".")[0].strip()
+        else:
+            candidate = (
+                first_line[:80].rsplit(" ", 1)[0] if len(first_line) > 80 else first_line
+            )
+        if candidate and len(candidate) > 2 and not _is_generic_title(candidate):
+            logger.info("Title from description first line: %r -> %r", title, candidate[:60])
+            return candidate, desc
+
+    fallback = (video_title or "").strip()
+    if fallback and not _is_generic_title(fallback):
+        return fallback, desc
+    return title or fallback or "Untitled", desc
+
+
+def _description_looks_like_dump(description: str, title: str | None = None) -> bool:
+    """True if description is ingredients/instructions dump, not a short blurb."""
+    if not description or not description.strip():
+        return True
+    d = description.strip()
+    dl = d.lower()
+    if title and title.strip():
+        t = title.strip()
+        tl = t.lower()
+        if dl == tl or dl == f"recipe: {tl}":
+            return True
+        if len(d) <= len(t) + 25 and tl in dl:
+            return True
+
+    # Ingredient / portion dumps (egg tart style)
+    measure_hits = len(
+        re.findall(
+            r"\b(\d+\s*/\s*\d+|\d+)\s*(cup|cups|tbsp|tsp|tablespoon|teaspoon|egg|eggs|oz|g|ml|lb)\b",
+            dl,
+        )
+    )
+    if measure_hits >= 3 and len(d) > 80:
+        return True
+    if dl.startswith("ingredients:") or dl.startswith("full portion") or "one-third portion" in dl:
+        return True
+    if d.count("\n") >= 4 and measure_hits >= 2:
+        return True
+    if len(d) > 400 and re.search(r"\b1[.)]\s", d) and re.search(r"\b2[.)]\s", d):
+        return True
+    return False
+
+
+def _truncate_description(description: str, max_chars: int = 220) -> str:
+    if not description or len(description) <= max_chars:
+        return description
+    for end in (". ", "! ", "? "):
+        idx = description.find(end)
+        if idx >= 30:
+            candidate = description[: idx + 1].strip()
+            if len(candidate) <= max_chars:
+                return candidate
+    return description[: max_chars - 3].rsplit(" ", 1)[0] + "..."
+
+
+def _normalize_cook_time(raw: str) -> str:
+    text = (raw or "").strip()
+    if not text or text.lower() in ("pending...", "pending", "unknown", "n/a"):
+        return ""
+    m = re.search(r"(\d{1,3})", text.replace(",", ""))
+    if not m:
+        return ""
+    minutes = int(m.group(1))
+    if minutes < 1 or minutes > 480:
+        return ""
+    return str(minutes)
+
+
+def _normalize_difficulty(raw: str) -> str:
+    text = (raw or "").strip()
+    for level in DIFFICULTIES:
+        if text.lower() == level.lower():
+            return level
+    return ""
+
+
+def _shared_extract_rules() -> str:
+    return (
+        "Return ONLY a JSON object with these keys:\n"
+        "{\n"
+        '  "title": "Specific dish name (never \'Video by …\', \'Untitled\', or account name)",\n'
+        '  "description": "1-2 short appetizing sentences about the dish (max ~220 chars). '
+        "NOT ingredients, NOT instructions, NOT portion lists\",\n"
+        '  "ingredients": "markdown or newline-separated list",\n'
+        '  "instructions": "numbered steps",\n'
+        '  "cookTime": "total minutes as a number string only, e.g. \\"30\\"",\n'
+        '  "difficulty": "Easy|Medium|Advanced",\n'
+        '  "timeReasoning": "brief why that cook time",\n'
+        '  "difficultyReasoning": "brief why that difficulty",\n'
+        '  "imageUrl": "best image url or empty"\n'
+        "}\n"
+        "Rules:\n"
+        "- Infer a real recipe title from the content if the source title is generic "
+        "(e.g. Instagram 'Video by username').\n"
+        "- Description must sell the dish; never paste the ingredient list into description.\n"
+        "- cookTime: total prep+cook+wait in minutes (integer string). Do not use Pending...\n"
+        "- difficulty: Easy, Medium, or Advanced only (not Undetermined).\n"
+        "- Always fill timeReasoning and difficultyReasoning with short explanations.\n"
+    )
+
+
+def _polish_description(title: str, ingredients: str, instructions: str) -> str:
     from json_util import as_text, extract_json_object
 
     prompt = (
-        "Extract recipe information from this web page text. "
-        "Return ONLY a JSON object:\n"
-        "{\n"
-        '  "title": "Recipe title",\n'
-        '  "description": "Brief description",\n'
-        '  "ingredients": "markdown or newline-separated list",\n'
-        '  "instructions": "numbered steps",\n'
-        '  "cookTime": "minutes as string or Pending...",\n'
-        '  "difficulty": "Easy|Medium|Advanced|Undetermined",\n'
-        '  "imageUrl": "best image url or empty"\n'
-        "}\n\n"
+        "You are an expert food writer. Write ONE short appetizing description "
+        "(1-2 sentences, under 220 characters) for this recipe. "
+        "Do NOT list ingredients or steps.\n"
+        'Return ONLY JSON: {"desc": "..."}\n\n'
+        f"Title: {title}\n\nIngredients:\n{ingredients[:1500]}\n\n"
+        f"Instructions:\n{instructions[:1500]}\n\nJSON:"
+    )
+    raw = chat(prompt, temperature=0.5, max_tokens=256)
+    data = extract_json_object(raw) or {}
+    desc = as_text(data.get("desc")) or as_text(raw)
+    desc = re.sub(r"^[*`\"']+|[*`\"']+$", "", desc).strip()
+    if not desc or _description_looks_like_dump(desc, title):
+        return f"A classic {title} recipe." if title else ""
+    return _truncate_description(desc)
+
+
+def _finalize_recipe(
+    data: dict,
+    *,
+    source_title: str = "",
+    allow_image: bool = True,
+) -> dict:
+    from json_util import as_text
+
+    title = as_text(data.get("title"))
+    description = as_text(data.get("description"))
+    ingredients = as_text(data.get("ingredients"))
+    instructions = as_text(data.get("instructions"))
+
+    title, description = _fix_generic_title(source_title, title, description)
+
+    if _description_looks_like_dump(description, title):
+        logger.info("Description looks like a dump; regenerating for title=%r", title[:60])
+        description = _polish_description(title, ingredients, instructions)
+    else:
+        description = _truncate_description(description)
+
+    if _is_generic_title(title) and ingredients:
+        # Last resort: ask model for a dish name only
+        from json_util import extract_json_object
+
+        raw = chat(
+            "Infer the specific dish name for this recipe. "
+            'Return ONLY JSON: {"title": "..."}\n\n'
+            f"Current title: {title}\nDescription: {description}\n"
+            f"Ingredients:\n{ingredients[:1200]}\nJSON:",
+            temperature=0.2,
+            max_tokens=128,
+        )
+        inferred = as_text((extract_json_object(raw) or {}).get("title"))
+        if inferred and not _is_generic_title(inferred):
+            title = inferred
+
+    cook_time = _normalize_cook_time(as_text(data.get("cookTime")))
+    difficulty = _normalize_difficulty(as_text(data.get("difficulty")))
+    time_reasoning = as_text(data.get("timeReasoning"))
+    difficulty_reasoning = as_text(data.get("difficultyReasoning"))
+
+    # If model omitted metadata, fill sensible defaults with reasoning
+    if not cook_time:
+        cook_time = "30"
+        time_reasoning = time_reasoning or "Defaulted to 30 minutes when source did not state total time."
+    if not difficulty:
+        difficulty = "Medium"
+        difficulty_reasoning = (
+            difficulty_reasoning
+            or "Defaulted to Medium when source did not state difficulty."
+        )
+
+    out = {
+        "title": title or source_title or "Untitled",
+        "description": description,
+        "ingredients": ingredients,
+        "instructions": instructions,
+        "cookTime": cook_time,
+        "difficulty": difficulty,
+        "imageUrl": as_text(data.get("imageUrl")) if allow_image else "",
+        "tags": data.get("tags") if isinstance(data.get("tags"), list) else [],
+        "timeReasoning": time_reasoning,
+        "difficultyReasoning": difficulty_reasoning,
+    }
+    return out
+
+
+def extract_recipe_from_page_text(visible_text: str) -> dict:
+    from json_util import extract_json_object
+
+    prompt = (
+        "Extract recipe information from this web page text.\n"
+        f"{_shared_extract_rules()}\n"
         f"Page text:\n{visible_text[:8000]}\n\nJSON:"
     )
-    raw = chat(prompt, max_tokens=2048)
+    raw = chat(prompt, max_tokens=2500)
     data = extract_json_object(raw) or {}
-    return {
-        "title": as_text(data.get("title")) or "Untitled",
-        "description": as_text(data.get("description")),
-        "ingredients": as_text(data.get("ingredients")),
-        "instructions": as_text(data.get("instructions")),
-        "cookTime": as_text(data.get("cookTime")) or "Pending...",
-        "difficulty": as_text(data.get("difficulty")) or "Undetermined",
-        "imageUrl": as_text(data.get("imageUrl")),
-        "tags": data.get("tags") if isinstance(data.get("tags"), list) else [],
-        "timeReasoning": "",
-        "difficultyReasoning": "",
-    }
+    return _finalize_recipe(data, allow_image=True)
 
 
 def extract_recipe_from_video(
     title: str, description: str, transcript: str, comments: str = ""
 ) -> dict:
-    from json_util import as_text, extract_json_object
+    from json_util import extract_json_object
 
     body = (
-        f"Title: {title}\n\n"
-        f"Description:\n{description or '(none)'}\n\n"
+        f"Source title: {title}\n\n"
+        f"Source description:\n{description or '(none)'}\n\n"
         f"Transcript:\n{transcript or '(none)'}\n\n"
     )
     if comments:
         body += f"Comments:\n{comments}\n\n"
     prompt = (
-        "You are a recipe data extractor. From the video content below, return ONLY JSON:\n"
-        "{\n"
-        '  "title": "Recipe title",\n'
-        '  "description": "Short description (max 220 words)",\n'
-        '  "ingredients": "markdown or newline-separated list",\n'
-        '  "instructions": "Numbered steps, one per line",\n'
-        '  "cookTime": "e.g. 30 or Pending...",\n'
-        '  "difficulty": "Easy|Medium|Advanced|Undetermined"\n'
-        "}\n\n"
+        "You are a recipe data extractor for cooking videos (YouTube/Instagram/etc).\n"
+        f"{_shared_extract_rules()}\n"
+        "If the source title is 'Video by …' or similarly generic, invent a specific dish title "
+        "from the transcript/description.\n\n"
         f"{body}JSON:"
     )
-    raw = chat(prompt, max_tokens=2048)
+    raw = chat(prompt, max_tokens=2500)
     data = extract_json_object(raw) or {}
-    return {
-        "title": as_text(data.get("title")) or title or "Untitled",
-        "description": as_text(data.get("description"))[:1200],
-        "ingredients": as_text(data.get("ingredients")),
-        "instructions": as_text(data.get("instructions")),
-        "cookTime": as_text(data.get("cookTime")) or "Pending...",
-        "difficulty": as_text(data.get("difficulty")) or "Undetermined",
-        "imageUrl": "",
-        "tags": [],
-        "timeReasoning": "",
-        "difficultyReasoning": "",
-    }
+    return _finalize_recipe(data, source_title=title, allow_image=False)
