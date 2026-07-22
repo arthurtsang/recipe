@@ -1,5 +1,6 @@
 import express from 'express';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
 import recipeRoutes from './routes/recipes';
 import path from 'path';
 import { auth, requiresAuth } from 'express-openid-connect';
@@ -163,8 +164,13 @@ app.get('/api/me', requiresAuth(), async (req: any, res) => {
     const name = req.oidc?.user?.name ?? dbUser.name ?? undefined;
     const displayName = userService.userDisplayName({ ...dbUser, name });
 
+    // Never expose apiToken on /api/me — use GET /api/me/token
+    const { apiToken: _apiToken, ...safeUser } = dbUser as typeof dbUser & {
+      apiToken?: string | null;
+    };
+
     res.json({
-      ...dbUser,
+      ...safeUser,
       picture,
       name,
       alias: dbUser.alias ?? undefined,
@@ -175,6 +181,44 @@ app.get('/api/me', requiresAuth(), async (req: any, res) => {
   } catch (err) {
     console.error('/api/me error:', err);
     res.status(500).json({ error: 'Failed to get user info' });
+  }
+});
+
+/** Current user's API token (for agent/script Bearer auth). */
+app.get('/api/me/token', requiresAuth(), requiresEnabledUser(), async (req: any, res) => {
+  try {
+    const email = req.oidc?.user?.email?.toLowerCase();
+    if (!email) return res.status(401).json({ error: 'No email' });
+    const dbUser = await prisma.user.findUnique({
+      where: { email },
+      select: { apiToken: true },
+    });
+    if (!dbUser) return res.status(404).json({ error: 'User not found' });
+    res.json({ apiToken: dbUser.apiToken ?? null });
+  } catch (err) {
+    console.error('/api/me/token error:', err);
+    res.status(500).json({ error: 'Failed to get API token' });
+  }
+});
+
+/** Generate a new API token (invalidates the previous one). */
+app.post('/api/me/token/refresh', requiresAuth(), requiresEnabledUser(), async (req: any, res) => {
+  try {
+    const email = req.oidc?.user?.email?.toLowerCase();
+    if (!email) return res.status(401).json({ error: 'No email' });
+    const apiToken = crypto.randomBytes(32).toString('hex');
+    const updated = await prisma.user.update({
+      where: { email },
+      data: { apiToken },
+      select: { apiToken: true },
+    });
+    res.json({ apiToken: updated.apiToken });
+  } catch (err: any) {
+    if (err?.code === 'P2025') {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    console.error('/api/me/token/refresh error:', err);
+    res.status(500).json({ error: 'Failed to refresh API token' });
   }
 });
 
