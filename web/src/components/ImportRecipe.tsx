@@ -349,14 +349,9 @@ const ImportRecipe: React.FC<ImportRecipeProps> = ({ open, onClose }) => {
       });
       
       setNotification(`Recipe "${imported.recipe.title}" saved successfully!`);
-      
-      // If this was the last recipe and dialog should close
-      if (importedRecipes.size === 1 && activeJobs.length === 0) {
-        setTimeout(() => {
-          onClose();
-          navigate(`/recipes/${data.id}`);
-        }, 1000);
-      } else {
+      // Always close before navigate — an open Dialog backdrop covers the next page.
+      onClose();
+      if (data?.id) {
         navigate(`/recipes/${data.id}`);
       }
     } catch (err) {
