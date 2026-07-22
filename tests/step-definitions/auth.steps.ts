@@ -16,13 +16,16 @@ When('I click the {string} button', async function (this: RecipeWorld, buttonTex
   await this.page!.getByRole('button', { name: new RegExp(buttonText, 'i') }).first().click();
 });
 
-When('I complete the mock OAuth flow', async function (this: RecipeWorld) {
-  await this.page!.waitForURL(/\/(auth|oauth|9999)/, { timeout: 5000 }).catch(() => {});
-  await this.page!.waitForURL(
-    url => !url.pathname.startsWith('/auth/google'),
-    { timeout: 15000 }
-  );
-  await this.page!.waitForLoadState('networkidle');
+Given('I am on the home page as a guest', async function (this: RecipeWorld) {
+  // Guest scenarios must not reuse a saved session
+  await this.context?.close();
+  this.context = await this.browser!.newContext({
+    baseURL: this.baseUrl,
+    ignoreHTTPSErrors: true,
+  });
+  this.page = await this.context.newPage();
+  await this.page.goto('/');
+  await this.page.waitForLoadState('networkidle');
 });
 
 Then('I should be logged in', async function (this: RecipeWorld) {
@@ -30,35 +33,20 @@ Then('I should be logged in', async function (this: RecipeWorld) {
 });
 
 Given('I am logged in', async function (this: RecipeWorld) {
-  await this.page!.goto('/');
-  await this.page!.waitForLoadState('networkidle');
-  const loginButton = this.page!.getByRole('button', { name: /login/i });
-  if (await loginButton.isVisible()) {
-    await loginButton.click();
-    await this.page!.waitForURL(/\/(auth|oauth|9999)/, { timeout: 5000 }).catch(() => {});
-    await this.page!.waitForURL(
-      url => !url.pathname.startsWith('/auth/google'),
-      { timeout: 15000 }
+  if (!this.storageStatePath) {
+    throw new Error(
+      'STORAGE_STATE is required for logged-in scenarios. See tests/README.md to create storage-state.json against the preview app.'
     );
   }
+  await this.page!.goto('/');
   await this.page!.waitForLoadState('networkidle');
-  await expect(this.page!.getByRole('button', { name: /Add Recipe/i })).toBeVisible({ timeout: 5000 });
+  await expect(this.page!.getByRole('button', { name: /Add Recipe/i })).toBeVisible({ timeout: 10000 });
 });
 
 Given('I am logged in as admin', async function (this: RecipeWorld) {
   await this.page!.goto('/');
   await this.page!.waitForLoadState('networkidle');
-  const loginButton = this.page!.getByRole('button', { name: /login/i });
-  if (await loginButton.isVisible()) {
-    await loginButton.click();
-    await this.page!.waitForURL(/\/(auth|oauth|9999)/, { timeout: 5000 }).catch(() => {});
-    await this.page!.waitForURL(
-      url => !url.pathname.startsWith('/auth/google'),
-      { timeout: 15000 }
-    );
-  }
-  await this.page!.waitForLoadState('networkidle');
-  await expect(this.page!.getByRole('button', { name: /Add Recipe/i })).toBeVisible({ timeout: 5000 });
+  await expect(this.page!.getByRole('button', { name: /Add Recipe/i })).toBeVisible({ timeout: 10000 });
 });
 
 When('I open the user menu', async function (this: RecipeWorld) {

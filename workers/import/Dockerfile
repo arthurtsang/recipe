@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY *.py ./
 
 ENV PYTHONUNBUFFERED=1 \
-    WORK_DIR=/tmp/oci-import \
+    WORK_DIR=/tmp/import-worker \
     WORKER_ID=cloud-run-job
 
 ENTRYPOINT ["python", "job_main.py"]

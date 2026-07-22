@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""OCI import poller: claim ImportJob rows from Supabase and process url/video imports."""
+"""Local debug poller: claim ImportJob rows from Supabase and process url/video imports.
+Production uses Cloud Run Jobs (job_main.py), not this loop.
+"""
 from __future__ import annotations
 
 import logging
@@ -20,7 +22,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
-logger = logging.getLogger("oci-import")
+logger = logging.getLogger("import-worker")
 
 
 def env_int(name: str, default: int) -> int:
@@ -35,7 +37,7 @@ def process_job(job: dict) -> None:
     url = job["url"]
     kind = (job.get("kind") or job.get("aiImportKind") or "url").lower()
     lease = env_int("LEASE_SECONDS", 900)
-    work_dir = Path(os.environ.get("WORK_DIR", "/tmp/oci-import"))
+    work_dir = Path(os.environ.get("WORK_DIR", "/tmp/import-worker"))
 
     def on_step(step: str) -> None:
         logger.info("job %s step=%s", job_id, step)
@@ -67,7 +69,7 @@ def main() -> int:
     worker_id = os.environ.get("WORKER_ID") or socket.gethostname()
     lease = env_int("LEASE_SECONDS", 900)
     idle = env_int("POLL_IDLE_SECONDS", 12)
-    logger.info("Starting OCI import worker id=%s lease=%ss idle=%ss", worker_id, lease, idle)
+    logger.info("Starting import poller id=%s lease=%ss idle=%ss", worker_id, lease, idle)
 
     while True:
         try:

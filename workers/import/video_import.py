@@ -97,7 +97,7 @@ def _download(url: str, work_dir: Path) -> Tuple[str, str, str, Optional[Path], 
 
     audio_path: Optional[Path] = None
     if not transcript:
-        # Need audio for Groq Whisper — requires cookies for many YouTube videos from OCI IPs
+        # Need audio for Groq Whisper — some platforms require cookies from cloud IPs
         audio_cmd = [
             "yt-dlp",
             "-x",

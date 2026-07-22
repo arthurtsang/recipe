@@ -16,7 +16,7 @@ The database is **PostgreSQL** (typically **Supabase**). Logical backups are:
 - **Docker always:** set **`PG_DUMP_DOCKER=1`** to skip the host `pg_dump`.
 - **`PG_DUMP_BIN`** — non-default path to `pg_dump` when not using Docker.
 - `DATABASE_URL` in `backend/.env` (same as the app)
-- Wasabi credentials (`.wasabi.yaml` or env; for systemd, set `WASABI_CONFIG_PATH` if the file is not next to `backend/`)
+- Wasabi credentials (`.wasabi.yaml` or env; set `WASABI_CONFIG_PATH` if the file is not next to `backend/`)
 
 ### Retention (pruning)
 
@@ -25,19 +25,6 @@ After each **successful** upload, the script lists `*.sql.gz` under the backup p
 ### Scheduled backups
 
 **Production (Vercel):** daily at **02:00 UTC** via `vercel.json` → `GET /api/cron/backup`. Vercel sends `Authorization: Bearer <CRON_SECRET>` automatically when `CRON_SECRET` is set on the project. The build installs a Linux `pg_dump` binary (`backend/scripts/install-pg-dump-for-vercel.sh`); backups use **`DIRECT_DATABASE_URL`** (session pooler port 5432 or direct host — not transaction pooler 6543).
-
-Disable the old host timer after Vercel cron is verified:
-
-```bash
-sudo systemctl disable --now metro-bistro-backup.timer
-```
-
-**Legacy (systemd on a host):** `metro-bistro-backup.timer` — daily at 02:00 local time. Prefer Vercel cron when deployed on Vercel.
-
-```bash
-sudo systemctl status metro-bistro-backup.timer
-sudo journalctl -u metro-bistro-backup.service --since "24 hours ago"
-```
 
 Check Vercel cron logs in the project **Logs** tab (filter `/api/cron/backup`) or trigger manually:
 

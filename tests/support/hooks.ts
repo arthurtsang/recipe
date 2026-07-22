@@ -16,6 +16,7 @@ Before(async function (this: RecipeWorld) {
   this.context = await this.browser.newContext({
     baseURL: this.baseUrl,
     ignoreHTTPSErrors: true,
+    ...(this.storageStatePath ? { storageState: this.storageStatePath } : {}),
   });
   this.page = await this.context.newPage();
 });

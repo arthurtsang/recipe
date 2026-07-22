@@ -9,7 +9,7 @@
 | In-memory AI job IDs | Supabase `ImportJob` + Pub/Sub kickoff + claim/lease `step` |
 | Always-on worker | Event-driven: publish `{ jobId, target }` → one-shot Cloud Run Job |
 
-OCI and Playwright are **not** part of this path.
+Legacy OCI host workers and Playwright scraping are **not** part of this path.
 
 ## Architecture
 
@@ -78,16 +78,15 @@ Budget: **$10/month** on this project + kill-switch unlinking **this project onl
 
 ## Worker package
 
-[`workers/oci-import/`](../workers/oci-import/) (folder name historical only):
+[`workers/import/`](../workers/import/):
 
 - `job_main.py` — Cloud Run Job entry (one `JOB_ID`)
-- `worker.py` — local poll loop only
 - URL path: **httpx + BeautifulSoup** (no Playwright)
 - Quality helpers: `nvidia_client.py` (title/desc/cook-time in one NVIDIA call), `page_signals.py` (JSON-LD, cook-time regex, image ranking)
 
 ## Carry-forward from old `ai_service` (Zephyr 4-bit)
 
-The old service spent most of its complexity fighting a tiny quantized model (prompt echo, dump descriptions, broken JSON). With NVIDIA Build we keep **one extract call** plus **deterministic safety nets** — not the full 3-call LLM ladder.
+Lessons from the retired local GPU service are ported into the Cloud Run worker. With NVIDIA Build we keep **one extract call** plus **deterministic safety nets**.
 
 | Old lesson | Status |
 |------------|--------|
@@ -106,6 +105,6 @@ The old service spent most of its complexity fighting a tiny quantized model (pr
 | EN/ZH/ES output language control | **Not in old service either** — still open |
 | Playlist / Watch Later bulk | **Not yet** (see `VIDEO_IMPORT_PLAN.md`) |
 
-## Local / e2e
+## E2E / BDD
 
-`mock_ai_service` remains for Cucumber e2e. Production path no longer calls it.
+Cucumber runs against the **Vercel preview + Dev Supabase** app only (`BASE_URL` required). No local Docker, mock OAuth, or mock AI. See [`tests/README.md`](../tests/README.md).

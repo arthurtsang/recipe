@@ -181,8 +181,8 @@ export async function requeueImportJob(id: string): Promise<ImportJobData | null
 }
 
 /**
- * Safety net: reset processing jobs whose lease expired so OCI can reclaim.
- * Primary reclaim also runs in the OCI worker.
+ * Safety net: reset processing jobs whose lease expired so the worker can reclaim.
+ * Primary reclaim also runs in the Cloud Run import worker.
  */
 export async function reclaimExpiredLeases(): Promise<number> {
   const now = new Date();

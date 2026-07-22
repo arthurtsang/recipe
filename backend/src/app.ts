@@ -409,7 +409,7 @@ app.post('/api/admin/import-jobs/:id/retry', requiresAuth(), requiresAdmin(), as
     const { id } = req.params;
     const job = await requeueImportJob(id);
     if (!job) return res.status(404).json({ error: 'Import job not found' });
-    res.json({ message: 'Job queued for OCI worker', jobId: id });
+    res.json({ message: 'Job queued for import worker', jobId: id });
   } catch (error) {
     console.error('Error retrying import job:', error);
     res.status(500).json({ error: 'Failed to retry job' });

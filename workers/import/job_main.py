@@ -56,7 +56,7 @@ def process_job(job: dict) -> None:
     url = job["url"]
     kind = (job.get("kind") or job.get("aiImportKind") or "url").lower()
     lease = env_int("LEASE_SECONDS", 900)
-    work_dir = Path(os.environ.get("WORK_DIR", "/tmp/oci-import"))
+    work_dir = Path(os.environ.get("WORK_DIR", "/tmp/import-worker"))
 
     def on_step(step: str) -> None:
         logger.info("job %s step=%s", job_id, step)

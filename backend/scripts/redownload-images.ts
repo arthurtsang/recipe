@@ -8,7 +8,6 @@ import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import axios from 'axios';
 
 const prisma = new PrismaClient();
 
@@ -282,48 +281,10 @@ async function redownloadRecipeImages() {
         console.log(`  Found original image URL from import job`);
         console.log(`  Original URL: ${originalImageUrl}`);
       } else if (recipe.sourceUrl) {
-        // Try to re-fetch from AI service
-        console.log(`\n[${successCount + failCount + skipCount + 1}/${recipesWithMissingFiles.length}] ${recipe.title}`);
-        console.log(`  Source URL: ${recipe.sourceUrl}`);
-        console.log(`  Current imageUrl: ${recipe.imageUrl}`);
-
-        try {
-          const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
-          const apiKey = process.env.AI_SERVICE_API_KEY;
-          const headers: any = { 'Content-Type': 'application/json' };
-          if (apiKey) {
-            headers['Authorization'] = `Bearer ${apiKey}`;
-          }
-          
-          const response = await axios.post(`${aiServiceUrl}/recipe/import`, 
-            { url: recipe.sourceUrl },
-            { headers }
-          );
-
-          if (response.status === 200) {
-            const data = response.data;
-            if (data.imageUrl && data.imageUrl.startsWith('http')) {
-              originalImageUrl = data.imageUrl;
-              console.log(`  Found image URL from AI service: ${originalImageUrl}`);
-            } else {
-              failCount++;
-              console.log(`  ✗ No image URL found in import response`);
-              continue;
-            }
-          } else {
-            failCount++;
-            console.log(`  ✗ Failed to fetch from AI service: HTTP ${response.status}`);
-            continue;
-          }
-        } catch (axiosError: any) {
-          failCount++;
-          if (axiosError.response) {
-            console.log(`  ✗ Failed to fetch from AI service: HTTP ${axiosError.response.status}`);
-          } else {
-            console.log(`  ✗ Error: ${axiosError.message || String(axiosError)}`);
-          }
-          continue;
-        }
+        skipCount++;
+        console.log(`\n[${successCount + failCount + skipCount}/${recipesWithMissingFiles.length}] ${recipe.title}`);
+        console.log(`  No cached source image URL — re-import via the app (Cloud Run worker) instead of this script`);
+        continue;
       } else {
         skipCount++;
         console.log(`\n[${successCount + failCount + skipCount}/${recipesWithMissingFiles.length}] ${recipe.title} - No source URL available, skipping`);
@@ -367,74 +328,8 @@ async function redownloadRecipeImages() {
 
   // Process recipes without images but with sourceUrl
   if (recipesWithoutImages.length > 0) {
-    console.log(`\n\nTrying to re-fetch images from source URLs for ${recipesWithoutImages.length} recipes without images...\n`);
-    
-    for (const recipe of recipesWithoutImages) {
-      if (!recipe.sourceUrl) {
-        skipCount++;
-        continue;
-      }
-
-      console.log(`\n[${successCount + failCount + skipCount + 1}/${recipesWithoutImages.length}] ${recipe.title}`);
-      console.log(`  Source URL: ${recipe.sourceUrl}`);
-
-      try {
-        const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
-        const apiKey = process.env.AI_SERVICE_API_KEY;
-        const headers: any = { 'Content-Type': 'application/json' };
-        if (apiKey) {
-          headers['Authorization'] = `Bearer ${apiKey}`;
-        }
-        
-        const response = await axios.post(`${aiServiceUrl}/recipe/import`, 
-          { url: recipe.sourceUrl },
-          { headers }
-        );
-
-        if (response.status === 200) {
-          const data = response.data;
-          if (data.imageUrl && data.imageUrl.startsWith('http')) {
-            const localUrl = await downloadAndSaveImage(data.imageUrl);
-            
-            if (localUrl && localUrl.startsWith('/uploads/')) {
-              await prisma.recipe.update({
-                where: { id: recipe.id },
-                data: { imageUrl: localUrl }
-              });
-
-              await prisma.recipeVersion.updateMany({
-                where: {
-                  recipeId: recipe.id,
-                  imageUrl: recipe.imageUrl || ''
-                },
-                data: { imageUrl: localUrl }
-              });
-
-              successCount++;
-              console.log(`  ✓ Updated to: ${localUrl}`);
-            } else {
-              failCount++;
-              console.log(`  ✗ Download failed`);
-            }
-          } else {
-            failCount++;
-            console.log(`  ✗ No image URL found in import response`);
-          }
-        } else {
-          failCount++;
-          console.log(`  ✗ Failed to fetch from AI service: HTTP ${response.status}`);
-        }
-      } catch (axiosError: any) {
-        failCount++;
-        if (axiosError.response) {
-          console.log(`  ✗ Failed to fetch from AI service: HTTP ${axiosError.response.status}`);
-        } else {
-          console.log(`  ✗ Error: ${axiosError.message || String(axiosError)}`);
-        }
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
+    console.log(`\n\nSkipping ${recipesWithoutImages.length} recipes without images — re-import via the app (Cloud Run worker).\n`);
+    skipCount += recipesWithoutImages.length;
   }
 
   console.log('\n\n=== Summary ===');

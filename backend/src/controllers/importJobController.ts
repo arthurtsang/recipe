@@ -72,7 +72,7 @@ export async function startImport(req: Request, res: Response) {
       urlList.map((url) => createImportJob(dbUser.id, url))
     );
 
-    // OCI worker polls Supabase and claims pending jobs — no AI_SERVICE_URL call.
+    // Import worker is triggered via Pub/Sub → Cloud Run Job.
     res.json({
       jobIds: jobs.map((j) => j.id),
       jobs: jobs.map((j) => ({
@@ -106,7 +106,7 @@ export async function getImportStatus(req: Request, res: Response) {
 
     const { jobId } = req.params;
 
-    // Safety net: reclaim expired OCI leases when clients poll.
+    // Safety net: reclaim expired worker leases when clients poll.
     await reclaimExpiredLeases();
 
     const job = await getImportJob(jobId);

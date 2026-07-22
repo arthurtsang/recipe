@@ -8,7 +8,7 @@ REPO="${AR_REPO:-metrobistro}"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/import-worker"
 TAG="${IMAGE_TAG:-$(date +%Y%m%d%H%M%S)}"
 
-gcloud builds submit "${ROOT}/workers/oci-import" \
+gcloud builds submit "${ROOT}/workers/import" \
   --project="${PROJECT_ID}" \
   --region="${REGION}" \
   --tag="${IMAGE}:${TAG}" \

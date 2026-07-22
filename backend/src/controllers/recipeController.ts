@@ -751,7 +751,7 @@ export async function importRecipe(req: Request, res: Response) {
       status: job.status,
       kind: job.kind,
       step: job.step,
-      message: 'Import queued for OCI worker; poll GET /api/imports/:jobId',
+      message: 'Import queued for Cloud Run worker; poll GET /api/imports/:jobId',
     });
   } catch (err: unknown) {
     console.error('Error importing recipe:', err);

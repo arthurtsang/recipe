@@ -1,4 +1,4 @@
-# Import worker (Cloud Run Job + local poller)
+# Import worker (Cloud Run Job)
 
 Processes Supabase `ImportJob` rows: URL/video import with NVIDIA + Groq.
 
@@ -9,10 +9,13 @@ Processes Supabase `ImportJob` rows: URL/video import with NVIDIA + Groq.
 | `metrobistro-import` | Prod secret | `public` |
 | `metrobistro-import-dev` | Dev secret | `metrobistro` |
 
-**Local poller:** `python worker.py` (`.env` with `DATABASE_URL`, `NVIDIA_API_KEY`, optional `GROQ_API_KEY`).
+**Build/push image:**
 
-**One-shot:** `JOB_ID=<uuid> IMPORT_SCHEMA=metrobistro python job_main.py`
+```bash
+./infra/gcp-import/scripts/build-push.sh
+# then: gcloud run jobs update metrobistro-import-dev --image=... --region=us-central1
+```
+
+**One-shot (local debug):** `JOB_ID=<uuid> IMPORT_SCHEMA=metrobistro python job_main.py`
 
 URL import uses **httpx + BeautifulSoup** (no Playwright). Video uses yt-dlp + optional Groq Whisper.
-
-Folder name `oci-import` is historical; OCI is not used.
