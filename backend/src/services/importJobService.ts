@@ -66,7 +66,17 @@ export async function createImportJob(userId: string, url: string): Promise<Impo
     const { publishImportJob } = await import('./gcpPubSub');
     await publishImportJob(job.id);
   } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
     console.error(`[IMPORT] Pub/Sub publish failed for ${job.id}:`, e);
+    await prisma.importJob.update({
+      where: { id: job.id },
+      data: {
+        status: 'failed',
+        step: 'failed',
+        error: `Failed to dispatch import worker: ${message}`,
+      },
+    });
+    throw e;
   }
   return job;
 }

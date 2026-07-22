@@ -51,10 +51,17 @@ export async function startImport(req: Request, res: Response) {
     
     // Single endpoint: body is { urls: string[] }. One URL = [url].
     const raw = req.body?.urls ?? req.body?.url;
+    const normalizeUrl = (u: string) => {
+      const trimmed = u.trim();
+      if (/^https?:\/\//i.test(trimmed)) return trimmed;
+      return `https://${trimmed}`;
+    };
     const urlList: string[] = Array.isArray(raw)
-      ? raw.filter((u: unknown) => typeof u === 'string' && (u as string).trim()).map((u: string) => (u as string).trim())
+      ? raw
+          .filter((u: unknown) => typeof u === 'string' && (u as string).trim())
+          .map((u: string) => normalizeUrl(u))
       : typeof raw === 'string' && raw.trim()
-        ? [raw.trim()]
+        ? [normalizeUrl(raw)]
         : [];
 
     if (urlList.length === 0) {
