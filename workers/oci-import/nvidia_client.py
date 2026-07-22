@@ -55,7 +55,7 @@ def _fix_generic_title(video_title: str, llm_title: str, llm_description: str) -
     if not _is_generic_title(title):
         return title or video_title or "Untitled", desc
 
-    if desc and len(desc) <= 120 and "\n" not in desc and not _description_looks_like_dump(desc, title):
+    if desc and len(desc) <= 120 and "\n" not in desc and not description_looks_like_dump(desc, title):
         logger.info("Title from short description: %r -> %r", title, desc[:60])
         return desc, ""
 
@@ -77,7 +77,7 @@ def _fix_generic_title(video_title: str, llm_title: str, llm_description: str) -
     return title or fallback or "Untitled", desc
 
 
-def _description_looks_like_dump(description: str, title: str | None = None) -> bool:
+def description_looks_like_dump(description: str, title: str | None = None) -> bool:
     """True if description is ingredients/instructions dump, not a short blurb."""
     if not description or not description.strip():
         return True
@@ -182,7 +182,7 @@ def _polish_description(title: str, ingredients: str, instructions: str) -> str:
     data = extract_json_object(raw) or {}
     desc = as_text(data.get("desc")) or as_text(raw)
     desc = re.sub(r"^[*`\"']+|[*`\"']+$", "", desc).strip()
-    if not desc or _description_looks_like_dump(desc, title):
+    if not desc or description_looks_like_dump(desc, title):
         return f"A classic {title} recipe." if title else ""
     return _truncate_description(desc)
 
@@ -192,6 +192,7 @@ def _finalize_recipe(
     *,
     source_title: str = "",
     allow_image: bool = True,
+    page_cook_time: str = "",
 ) -> dict:
     from json_util import as_text
 
@@ -202,7 +203,7 @@ def _finalize_recipe(
 
     title, description = _fix_generic_title(source_title, title, description)
 
-    if _description_looks_like_dump(description, title):
+    if description_looks_like_dump(description, title):
         logger.info("Description looks like a dump; regenerating for title=%r", title[:60])
         description = _polish_description(title, ingredients, instructions)
     else:
@@ -225,8 +226,12 @@ def _finalize_recipe(
             title = inferred
 
     cook_time = _normalize_cook_time(as_text(data.get("cookTime")))
-    difficulty = _normalize_difficulty(as_text(data.get("difficulty")))
     time_reasoning = as_text(data.get("timeReasoning"))
+    page_time = _normalize_cook_time(page_cook_time)
+    if page_time and (not cook_time or cook_time == "30"):
+        cook_time = page_time
+        time_reasoning = "Extracted from page text / structured data."
+    difficulty = _normalize_difficulty(as_text(data.get("difficulty")))
     difficulty_reasoning = as_text(data.get("difficultyReasoning"))
 
     # If model omitted metadata, fill sensible defaults with reasoning
@@ -255,17 +260,47 @@ def _finalize_recipe(
     return out
 
 
-def extract_recipe_from_page_text(visible_text: str) -> dict:
+def _number_instructions(instructions: str) -> str:
+    text = (instructions or "").strip()
+    if not text:
+        return text
+    if re.search(r"^\s*\d+[.)]\s", text, re.M):
+        return text
+    # One blob → sentence steps (ai_service _instructions_to_numbered_steps)
+    parts = re.split(r"(?<=[.!?])\s+", text)
+    parts = [p.strip() for p in parts if p.strip()]
+    if len(parts) < 2:
+        return text
+    return "\n".join(f"{i}. {p}" for i, p in enumerate(parts, 1))
+
+
+def extract_recipe_from_page_text(
+    visible_text: str,
+    *,
+    page_cook_time: str = "",
+    known_image_urls: list[str] | None = None,
+) -> dict:
     from json_util import extract_json_object
 
+    hint = ""
+    if page_cook_time:
+        hint += f"Page states total time around {page_cook_time} minutes — use that for cookTime unless clearly wrong.\n"
     prompt = (
         "Extract recipe information from this web page text.\n"
         f"{_shared_extract_rules()}\n"
+        f"{hint}"
         f"Page text:\n{visible_text[:8000]}\n\nJSON:"
     )
     raw = chat(prompt, max_tokens=2500)
     data = extract_json_object(raw) or {}
-    return _finalize_recipe(data, allow_image=True)
+    result = _finalize_recipe(data, allow_image=True, page_cook_time=page_cook_time)
+    result["instructions"] = _number_instructions(result.get("instructions") or "")
+    # Drop hallucinated image URLs not found on the page
+    urls = known_image_urls or []
+    img = (result.get("imageUrl") or "").strip()
+    if img and urls and img not in urls and not any(img.split("?")[0] == u.split("?")[0] for u in urls):
+        result["imageUrl"] = ""
+    return result
 
 
 def extract_recipe_from_video(
@@ -279,14 +314,20 @@ def extract_recipe_from_video(
         f"Transcript:\n{transcript or '(none)'}\n\n"
     )
     if comments:
-        body += f"Comments:\n{comments}\n\n"
+        body += (
+            "Uploader/same-user comments (often contain the real recipe — prefer these):\n"
+            f"{comments}\n\n"
+        )
     prompt = (
         "You are a recipe data extractor for cooking videos (YouTube/Instagram/etc).\n"
         f"{_shared_extract_rules()}\n"
         "If the source title is 'Video by …' or similarly generic, invent a specific dish title "
-        "from the transcript/description.\n\n"
+        "from the transcript/description/comments.\n"
+        "When comments include ingredients/steps, treat them as primary recipe source.\n\n"
         f"{body}JSON:"
     )
     raw = chat(prompt, max_tokens=2500)
     data = extract_json_object(raw) or {}
-    return _finalize_recipe(data, source_title=title, allow_image=False)
+    result = _finalize_recipe(data, source_title=title, allow_image=False)
+    result["instructions"] = _number_instructions(result.get("instructions") or "")
+    return result

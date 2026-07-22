@@ -26,9 +26,28 @@ def _srt_to_text(srt_path: Path) -> str:
     return "\n".join(lines).strip()
 
 
-def _download(url: str, work_dir: Path) -> Tuple[str, str, str, Optional[Path], str]:
+def _comments_from_same_user(comments: list, max_count: int = 2) -> str:
+    """Prefer uploader comments (ai_service _comments_from_same_user)."""
+    if not comments or max_count <= 0:
+        return ""
+    uploader = [c for c in comments if c.get("author_is_uploader")][:max_count]
+    chosen = uploader
+    if len(chosen) < max_count and comments:
+        author_id = (chosen[0].get("author_id") if chosen else comments[0].get("author_id"))
+        same = [c for c in comments if c.get("author_id") == author_id][:max_count]
+        chosen = same or comments[:max_count]
+    lines = []
+    for c in chosen:
+        text = (c.get("text") or c.get("content") or "").strip()
+        author = (c.get("author") or "").strip()
+        if text:
+            lines.append(f"{author}: {text}" if author else text)
+    return "\n".join(lines)
+
+
+def _download(url: str, work_dir: Path) -> Tuple[str, str, str, Optional[Path], str, str]:
     """
-    Returns title, description, transcript_or_empty, audio_path_or_None, thumbnail_url.
+    Returns title, description, transcript, audio_path, thumbnail_url, comments_text.
     Prefers subtitles; downloads audio when no subtitle.
     """
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -38,6 +57,9 @@ def _download(url: str, work_dir: Path) -> Tuple[str, str, str, Optional[Path], 
         "--write-info-json",
         "--write-auto-sub",
         "--write-sub",
+        "--write-comments",
+        "--extractor-args",
+        "youtube:max-comments=50",
         "--sub-langs",
         "en.*,zh.*,es.*,en,zh,es",
         "--skip-download",
@@ -59,11 +81,13 @@ def _download(url: str, work_dir: Path) -> Tuple[str, str, str, Optional[Path], 
     title = ""
     description = ""
     thumb = ""
+    comments_text = ""
     if info_files:
         info = json.loads(info_files[0].read_text(encoding="utf-8"))
         title = info.get("title") or ""
         description = info.get("description") or ""
         thumb = info.get("thumbnail") or ""
+        comments_text = _comments_from_same_user(info.get("comments") or [])
 
     transcript = ""
     for srt in work_dir.glob("*.srt"):
@@ -121,7 +145,7 @@ def _download(url: str, work_dir: Path) -> Tuple[str, str, str, Optional[Path], 
             raise RuntimeError(f"ffmpeg failed: {(ff.stderr or '')[:500]}")
         audio_path = wav
 
-    return title, description, transcript, audio_path, thumb
+    return title, description, transcript, audio_path, thumb, comments_text
 
 
 def import_from_video(url: str, work_dir: Path, on_step: Callable[[str], None]) -> dict:
@@ -135,7 +159,7 @@ def import_from_video(url: str, work_dir: Path, on_step: Callable[[str], None]) 
                 pass
     job_dir.mkdir(parents=True, exist_ok=True)
 
-    title, description, transcript, audio_path, thumb = _download(url, job_dir)
+    title, description, transcript, audio_path, thumb, comments = _download(url, job_dir)
 
     if not transcript and audio_path:
         on_step("transcribing")
@@ -143,14 +167,16 @@ def import_from_video(url: str, work_dir: Path, on_step: Callable[[str], None]) 
         if not transcript:
             raise RuntimeError("Groq Whisper returned empty transcript")
 
-    if not transcript and not description:
+    if not transcript and not description and not comments:
         raise RuntimeError(
-            "No captions, transcript, or description available. "
+            "No captions, transcript, description, or comments available. "
             "Set YTDLP_COOKIES for YouTube bot checks, or use a video with captions."
         )
 
     on_step("extracting")
-    result = nvidia_client.extract_recipe_from_video(title, description, transcript)
+    result = nvidia_client.extract_recipe_from_video(
+        title, description, transcript, comments=comments
+    )
     if thumb and not result.get("imageUrl"):
         result["imageUrl"] = thumb
     return result
