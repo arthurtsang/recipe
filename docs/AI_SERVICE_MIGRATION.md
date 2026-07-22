@@ -56,8 +56,10 @@ GCP_PUBSUB_TOPIC=metrobistro-import-jobs
 
 Per environment:
 
-- **Production:** `DATABASE_URL` → prod pooler (`?schema=public` or omit)
-- **Preview:** `DATABASE_URL` → Dev pooler with `?schema=metrobistro`
+- **Production:** `DATABASE_URL` → prod pooler (`?schema=public` or omit); `BASE_URL` → prod domain
+- **Preview:** `DATABASE_URL` → Dev pooler with `?schema=metrobistro`. Do **not** set `BASE_URL` to production — OAuth uses `VERCEL_BRANCH_URL` / `VERCEL_URL`. Add the Preview callback to the Google OAuth client:
+  `https://<preview-host>/auth/google/callback`
+  (stable branch host example: `https://recipe-git-feature-ai-oci-import-nvidia-tsang-project.vercel.app/auth/google/callback`)
 
 ## GCP
 
