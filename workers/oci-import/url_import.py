@@ -54,17 +54,49 @@ def _pick_image(soup: BeautifulSoup, base_url: str) -> str:
     return ""
 
 
-def import_from_url(url: str, on_step: Callable[[str], None]) -> dict:
-    on_step("fetching")
-    logger.info("httpx fetch: %s", url)
+def _is_tls_verify_error(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return any(
+        token in msg
+        for token in (
+            "certificate",
+            "ssl",
+            "tls",
+            "certificate_verify_failed",
+            "self-signed",
+        )
+    )
+
+
+def _fetch_html(url: str) -> str:
+    """Fetch page HTML. Retry without TLS verify if the site has a bad/expired cert."""
+    headers = {"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"}
+    with httpx.Client(follow_redirects=True, timeout=45.0, headers=headers) as client:
+        try:
+            resp = client.get(url)
+            resp.raise_for_status()
+            return resp.text
+        except Exception as e:
+            # Sites like myrecipe.kitchen use self-signed / expired certs.
+            if not _is_tls_verify_error(e):
+                raise
+            logger.warning("TLS verify failed for %s (%s); retrying with verify=False", url, e)
+
     with httpx.Client(
         follow_redirects=True,
         timeout=45.0,
-        headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"},
+        headers=headers,
+        verify=False,
     ) as client:
         resp = client.get(url)
         resp.raise_for_status()
-        html = resp.text
+        return resp.text
+
+
+def import_from_url(url: str, on_step: Callable[[str], None]) -> dict:
+    on_step("fetching")
+    logger.info("httpx fetch: %s", url)
+    html = _fetch_html(url)
 
     soup = BeautifulSoup(html, "html.parser")
     visible = _clean_html(soup)
