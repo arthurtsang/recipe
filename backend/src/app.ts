@@ -23,7 +23,10 @@ import { requiresEnabledUser, requiresAdmin } from './middleware/auth';
 import { requireCronSecret } from './middleware/cronAuth';
 import importJobRoutes from './routes/importJobs';
 
-dotenv.config({ path: path.join(__dirname, '../.env') });
+// Local only — on Vercel, project env vars are already injected (avoid .env clobbering).
+if (!process.env.VERCEL) {
+  dotenv.config({ path: path.join(__dirname, '../.env') });
+}
 
 const googleClientId = requireEnv('GOOGLE_CLIENT_ID');
 const googleClientSecret = requireEnv('GOOGLE_CLIENT_SECRET');
@@ -50,6 +53,11 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 const baseUrl = getBaseUrl();
+console.log('[oidc] baseURL', baseUrl, {
+  vercelEnv: process.env.VERCEL_ENV,
+  baseUrlLen: process.env.BASE_URL?.length ?? 0,
+  previewBaseUrlLen: process.env.PREVIEW_BASE_URL?.length ?? 0,
+});
 
 app.use(
   auth({

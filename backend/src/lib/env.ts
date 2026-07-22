@@ -1,8 +1,14 @@
-/** Trim whitespace from env vars (common copy/paste issue in Vercel dashboard). */
+/** Trim whitespace / wrapping quotes from env vars (Vercel/dashboard copy-paste). */
 export function env(name: string): string | undefined {
   const value = process.env[name];
   if (value == null) return undefined;
-  const trimmed = value.trim();
+  let trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    trimmed = trimmed.slice(1, -1).trim();
+  }
   return trimmed === '' ? undefined : trimmed;
 }
 

@@ -2,6 +2,9 @@ import type { Request } from 'express';
 
 import { env } from './env';
 
+/** Stable Preview host (Google OAuth redirect URI). Avoids per-branch *.vercel.app URLs. */
+const PREVIEW_STABLE_BASE_URL = 'https://recipe-preview.youramaryllis.com';
+
 function httpsHost(hostOrUrl: string): string {
   const stripped = hostOrUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   return `https://${stripped}`;
@@ -10,18 +13,15 @@ function httpsHost(hostOrUrl: string): string {
 /**
  * Public app URL used for OIDC baseURL / redirects.
  *
- * Preview: prefer a stable BASE_URL / PREVIEW_BASE_URL (one Google redirect URI).
- * Fall back to VERCEL_BRANCH_URL / VERCEL_URL only when no stable preview host is set.
- * Never use Production BASE_URL on Preview (that causes OAuth state mismatch).
+ * Preview: always use the stable custom domain (env override allowed) so Google
+ * redirect_uri matches a single registered URI. Never use Production BASE_URL
+ * or per-branch VERCEL_BRANCH_URL on Preview.
  */
 export function getBaseUrl(): string {
   if (process.env.VERCEL_ENV === 'preview') {
-    const stable = env('PREVIEW_BASE_URL') || env('BASE_URL');
-    if (stable) return stable.replace(/\/+$/, '');
-    const branch = env('VERCEL_BRANCH_URL');
-    if (branch) return httpsHost(branch);
-    const deployment = env('VERCEL_URL');
-    if (deployment) return httpsHost(deployment);
+    const stable =
+      env('PREVIEW_BASE_URL') || env('BASE_URL') || PREVIEW_STABLE_BASE_URL;
+    return stable.replace(/\/+$/, '');
   }
 
   const fromEnv = env('BASE_URL');
