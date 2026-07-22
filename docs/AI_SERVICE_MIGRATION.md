@@ -57,9 +57,9 @@ GCP_PUBSUB_TOPIC=metrobistro-import-jobs
 Per environment:
 
 - **Production:** `DATABASE_URL` → prod pooler (`?schema=public` or omit); `BASE_URL` → prod domain
-- **Preview:** `DATABASE_URL` → Dev pooler with `?schema=metrobistro`. Do **not** set `BASE_URL` to production — OAuth uses `VERCEL_BRANCH_URL` / `VERCEL_URL`. Add the Preview callback to the Google OAuth client:
-  `https://<preview-host>/auth/google/callback`
-  (stable branch host example: `https://recipe-git-feature-ai-oci-import-nvidia-tsang-project.vercel.app/auth/google/callback`)
+- **Preview:** `DATABASE_URL` → Dev pooler with `?schema=metrobistro`. Set a **stable** Preview host via `BASE_URL` or `PREVIEW_BASE_URL` (e.g. `https://recipe-preview.youramaryllis.com`) and add **one** Google redirect URI:
+  `https://recipe-preview.youramaryllis.com/auth/google/callback`
+  Do not point Preview `BASE_URL` at production. Avoid relying on per-branch `*.vercel.app` URLs for OAuth (Google needs an exact URI per host).
 
 ## GCP
 

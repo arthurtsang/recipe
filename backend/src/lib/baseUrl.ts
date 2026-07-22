@@ -9,12 +9,15 @@ function httpsHost(hostOrUrl: string): string {
 
 /**
  * Public app URL used for OIDC baseURL / redirects.
- * On Vercel Preview, prefer the deployment/branch host so Google callback
- * does not send users to Production (BASE_URL).
+ *
+ * Preview: prefer a stable BASE_URL / PREVIEW_BASE_URL (one Google redirect URI).
+ * Fall back to VERCEL_BRANCH_URL / VERCEL_URL only when no stable preview host is set.
+ * Never use Production BASE_URL on Preview (that causes OAuth state mismatch).
  */
 export function getBaseUrl(): string {
-  // Preview: never use Production BASE_URL — that causes OAuth state mismatch.
   if (process.env.VERCEL_ENV === 'preview') {
+    const stable = env('PREVIEW_BASE_URL') || env('BASE_URL');
+    if (stable) return stable.replace(/\/+$/, '');
     const branch = env('VERCEL_BRANCH_URL');
     if (branch) return httpsHost(branch);
     const deployment = env('VERCEL_URL');
@@ -49,6 +52,8 @@ export function corsOrigins(): string[] {
   const origins = new Set<string>([getBaseUrl()]);
   const base = env('BASE_URL');
   if (base) origins.add(base.replace(/\/+$/, ''));
+  const preview = env('PREVIEW_BASE_URL');
+  if (preview) origins.add(preview.replace(/\/+$/, ''));
   if (process.env.NODE_ENV !== 'production') {
     origins.add('http://localhost:4000');
     origins.add('http://localhost:5173');
