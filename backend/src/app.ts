@@ -9,10 +9,9 @@ import cors from 'cors';
 import * as userService from './services/userService';
 import tagRoutes from './routes/tags';
 import {
-  startImportJobOnly,
-  ensureAtMostOneProcessing,
   processPendingImportJobs,
-  pollProcessingImportJob,
+  reclaimExpiredLeases,
+  requeueImportJob,
 } from './services/importJobService';
 import { findRecipesNeedingAnalysis, processRecipeAnalysisQueue } from './services/recipeAnalysisService';
 import { backupDatabaseToWasabi } from './services/databaseBackupService';
@@ -220,7 +219,7 @@ app.patch('/api/admin/users/:id/enable', requiresAuth(), requiresAdmin(), async 
 
 app.get('/api/admin/queues', requiresAuth(), requiresAdmin(), async (_req, res) => {
   try {
-    await ensureAtMostOneProcessing();
+    await reclaimExpiredLeases();
     const [pendingJobs, processingJobs, recentFailed, recentCompleted, pendingRecipeIds, recentAnalyzed] =
       await Promise.all([
         prisma.importJob.findMany({
@@ -229,6 +228,8 @@ app.get('/api/admin/queues', requiresAuth(), requiresAdmin(), async (_req, res) 
           select: {
             id: true,
             url: true,
+            kind: true,
+            step: true,
             userId: true,
             createdAt: true,
             updatedAt: true,
@@ -243,6 +244,10 @@ app.get('/api/admin/queues', requiresAuth(), requiresAdmin(), async (_req, res) 
           select: {
             id: true,
             url: true,
+            kind: true,
+            step: true,
+            claimedBy: true,
+            leaseExpiresAt: true,
             userId: true,
             createdAt: true,
             updatedAt: true,
@@ -326,12 +331,17 @@ app.post('/api/admin/import-jobs/retry-all', requiresAuth(), requiresAdmin(), as
       where: { status: 'failed' },
       data: {
         status: 'pending',
+        step: 'queued',
         error: null,
         result: null,
         startedAt: null,
         completedAt: null,
         savedRecipeId: null,
+        claimedAt: null,
+        claimedBy: null,
+        leaseExpiresAt: null,
         aiImportJobId: null,
+        aiImportKind: null,
         updatedAt: new Date(),
       },
     });
@@ -345,28 +355,9 @@ app.post('/api/admin/import-jobs/retry-all', requiresAuth(), requiresAdmin(), as
 app.post('/api/admin/import-jobs/:id/retry', requiresAuth(), requiresAdmin(), async (req, res) => {
   try {
     const { id } = req.params;
-    const job = await prisma.importJob.findUnique({ where: { id } });
+    const job = await requeueImportJob(id);
     if (!job) return res.status(404).json({ error: 'Import job not found' });
-    try {
-      await prisma.importJob.update({
-        where: { id },
-        data: {
-          status: 'pending',
-          error: null,
-          result: null,
-          startedAt: null,
-          completedAt: null,
-          savedRecipeId: null,
-          aiImportJobId: null,
-          updatedAt: new Date(),
-        },
-      });
-    } catch (e: any) {
-      if (e?.code === 'P2025') return res.status(404).json({ error: 'Import job not found' });
-      throw e;
-    }
-    startImportJobOnly(id).catch((err) => console.error(`[IMPORT] Admin retry job ${id}:`, err));
-    res.json({ message: 'Job queued for retry', jobId: id });
+    res.json({ message: 'Job queued for OCI worker', jobId: id });
   } catch (error) {
     console.error('Error retrying import job:', error);
     res.status(500).json({ error: 'Failed to retry job' });
@@ -385,8 +376,8 @@ app.get('/api/health', async (_req, res) => {
 
 app.get('/api/cron/daily', requireCronSecret, async (_req, res) => {
   try {
+    await reclaimExpiredLeases();
     await processPendingImportJobs();
-    await pollProcessingImportJob();
     await processRecipeAnalysisQueue();
     res.json({ ok: true });
   } catch (err) {
@@ -397,9 +388,8 @@ app.get('/api/cron/daily', requireCronSecret, async (_req, res) => {
 
 app.get('/api/cron/import-jobs', requireCronSecret, async (_req, res) => {
   try {
-    await processPendingImportJobs();
-    await pollProcessingImportJob();
-    res.json({ ok: true });
+    const reclaimed = await reclaimExpiredLeases();
+    res.json({ ok: true, reclaimed });
   } catch (err) {
     console.error('[cron] import-jobs error:', err);
     res.status(500).json({ error: 'Cron failed' });

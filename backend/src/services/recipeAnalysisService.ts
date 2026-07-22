@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma';
-import axios from 'axios';
+import { extractJsonObject, nvidiaChat } from '../lib/nvidia';
 
 export interface RecipeAnalysis {
   estimatedTime: string;
@@ -9,14 +9,85 @@ export interface RecipeAnalysis {
   description?: string;
 }
 
+function buildAnalysisPrompt(
+  title: string,
+  description: string,
+  ingredients: string,
+  instructions: string
+): string {
+  return `You are an expert cooking instructor and recipe analyst. Analyze the following recipe and provide consistent, accurate assessments.
+
+Recipe Title: ${title}
+Description: ${description}
+
+Ingredients:
+${ingredients}
+
+Instructions:
+${instructions}
+
+Please analyze this recipe and provide your assessment in the following JSON format:
+
+{
+  "estimatedTime": "time-range",
+  "difficulty": "difficulty-level",
+  "timeReasoning": "detailed explanation of time estimation",
+  "difficultyReasoning": "detailed explanation of difficulty assessment"
+}
+
+For estimatedTime, provide a single approximate time in minutes:
+- Return only the number of minutes as a string (e.g., "25", "45", "120")
+- Consider total time including prep, cooking, and any waiting time
+- Do not include "mins" or "minutes" - just the number
+
+For difficulty, assess based on required cooking skills:
+- "Easy": Basic skills
+- "Medium": Intermediate skills
+- "Advanced": Expert skills
+
+Return ONLY valid JSON.`;
+}
+
+function buildDescriptionPrompt(title: string, ingredients: string, instructions: string): string {
+  return `You are an expert food writer. Write a brief, appetizing description for this recipe.
+
+Recipe Title: ${title}
+
+Ingredients:
+${ingredients}
+
+Instructions:
+${instructions}
+
+Write a concise, engaging description (2-3 sentences). Provide only the description text, no additional formatting.`;
+}
+
+function parseAnalysis(raw: string): RecipeAnalysis {
+  const json = extractJsonObject(raw);
+  let estimatedTime = String(json?.estimatedTime ?? '30');
+  let difficulty = String(json?.difficulty ?? 'Medium');
+
+  const minutes = parseInt(estimatedTime, 10);
+  if (!Number.isFinite(minutes) || minutes < 1 || minutes > 480) {
+    estimatedTime = '30';
+  }
+  if (!['Easy', 'Medium', 'Advanced'].includes(difficulty)) {
+    difficulty = 'Medium';
+  }
+
+  return {
+    estimatedTime,
+    difficulty,
+    timeReasoning: String(json?.timeReasoning ?? ''),
+    difficultyReasoning: String(json?.difficultyReasoning ?? ''),
+  };
+}
+
 export async function analyzeRecipeWithAI(recipeId: string): Promise<RecipeAnalysis | null> {
   try {
-    // Get the recipe with its current version
     const recipe = await prisma.recipe.findUnique({
       where: { id: recipeId },
-      include: {
-        currentVersion: true,
-      },
+      include: { currentVersion: true },
     });
 
     if (!recipe || !recipe.currentVersion) {
@@ -24,27 +95,34 @@ export async function analyzeRecipeWithAI(recipeId: string): Promise<RecipeAnaly
       return null;
     }
 
-    // Skip if recipe already has user-provided metadata
     if (recipe.estimatedTime || recipe.difficulty) {
       console.log(`[recipe-analysis] Recipe ${recipeId} already has metadata, skipping`);
       return null;
     }
 
-    // Prepare data for AI analysis
-    const analysisData = {
-      title: recipe.title,
-      description: recipe.description || '',
-      ingredients: recipe.currentVersion.ingredients,
-      instructions: recipe.currentVersion.instructions,
-    };
+    const title = recipe.title;
+    const description = recipe.description || '';
+    const ingredients = recipe.currentVersion.ingredients;
+    const instructions = recipe.currentVersion.instructions;
 
-    // Call AI service
-    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
-    const response = await axios.post(`${aiServiceUrl}/recipe/analyze`, analysisData);
+    const analysisRaw = await nvidiaChat(
+      [{ role: 'user', content: buildAnalysisPrompt(title, description, ingredients, instructions) }],
+      { temperature: 0.3, maxTokens: 1024 }
+    );
+    const analysis = parseAnalysis(analysisRaw);
 
-    const analysis: RecipeAnalysis = response.data;
+    if (!description.trim()) {
+      try {
+        const desc = await nvidiaChat(
+          [{ role: 'user', content: buildDescriptionPrompt(title, ingredients, instructions) }],
+          { temperature: 0.5, maxTokens: 256 }
+        );
+        analysis.description = desc.replace(/\*\*/g, '').slice(0, 500);
+      } catch (e) {
+        console.warn(`[recipe-analysis] Description generation failed for ${recipeId}:`, e);
+      }
+    }
 
-    // Update the recipe with the analysis results
     await prisma.recipe.update({
       where: { id: recipeId },
       data: {
@@ -56,9 +134,10 @@ export async function analyzeRecipeWithAI(recipeId: string): Promise<RecipeAnaly
       },
     });
 
-    console.log(`[recipe-analysis] Successfully analyzed recipe ${recipeId}: ${analysis.estimatedTime}, ${analysis.difficulty}`);
+    console.log(
+      `[recipe-analysis] Successfully analyzed recipe ${recipeId}: ${analysis.estimatedTime}, ${analysis.difficulty}`
+    );
     return analysis;
-
   } catch (error) {
     console.error(`[recipe-analysis] Error analyzing recipe ${recipeId}:`, error);
     return null;
@@ -79,8 +158,7 @@ export async function findRecipesNeedingAnalysis(limit: number = 10): Promise<st
       take: limit,
       orderBy: { createdAt: 'desc' },
     });
-
-    return recipes.map(recipe => recipe.id);
+    return recipes.map((recipe) => recipe.id);
   } catch (error) {
     console.error('[recipe-analysis] Error finding recipes needing analysis:', error);
     return [];
@@ -90,37 +168,24 @@ export async function findRecipesNeedingAnalysis(limit: number = 10): Promise<st
 export async function processRecipeAnalysisQueue(): Promise<void> {
   try {
     console.log('[recipe-analysis] Starting recipe analysis queue processing...');
-    // One recipe at a time to avoid overloading the AI server
     const recipeIds = await findRecipesNeedingAnalysis(1);
-
     if (recipeIds.length === 0) {
       console.log('[recipe-analysis] No recipes need analysis');
       return;
     }
-
     const recipeId = recipeIds[0];
     console.log(`[recipe-analysis] Processing 1 recipe: ${recipeId}`);
-
-    try {
-      await analyzeRecipeWithAI(recipeId);
-      console.log('[recipe-analysis] Recipe analysis queue processing complete');
-    } catch (error) {
-      console.error(`[recipe-analysis] Failed to analyze recipe ${recipeId}:`, error);
-    }
-
+    await analyzeRecipeWithAI(recipeId);
+    console.log('[recipe-analysis] Recipe analysis queue processing complete');
   } catch (error) {
     console.error('[recipe-analysis] Error processing recipe analysis queue:', error);
   }
 }
 
-// Function to start the background processing
 export function startRecipeAnalysisScheduler(): void {
-  // Process queue every 5 minutes
-  const interval = 5 * 60 * 1000; // 5 minutes in milliseconds
-  
+  const interval = 5 * 60 * 1000;
   setInterval(async () => {
     await processRecipeAnalysisQueue();
   }, interval);
-
   console.log('[recipe-analysis] Recipe analysis scheduler started (every 5 minutes)');
-} 
+}

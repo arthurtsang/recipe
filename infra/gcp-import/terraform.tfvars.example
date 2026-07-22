@@ -1,0 +1,8 @@
+project_id          = "your-gcp-project-id"
+region              = "us-central1"
+billing_account_id  = "XXXXXX-XXXXXX-XXXXXX"
+vercel_team_slug    = "your-vercel-team-slug"
+vercel_project_name = "your-vercel-project-name"
+budget_amount_usd   = 10
+# Set after first image push, or leave empty to use default AR :latest
+# worker_image = "us-central1-docker.pkg.dev/your-gcp-project-id/metrobistro/import-worker:latest"

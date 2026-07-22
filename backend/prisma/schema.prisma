@@ -105,14 +105,22 @@ model ImportJob {
   userId         String
   url            String
   status         String    @default("pending") // pending, processing, completed, failed
+  kind           String    @default("url") // 'url' | 'video' — which OCI worker path
+  step           String    @default("queued") // queued | claimed | fetching | transcribing | extracting | completed | failed
   result         Json?     // Stores the imported recipe data
   error          String?   // Error message if failed
   savedRecipeId  String?   // ID of the recipe if it was saved from this import
-  aiImportJobId  String?   // AI service job ID when async; used to resume polling after restart
-  aiImportKind   String?   // 'url' | 'video' – which AI endpoint to poll; null = url (backward compat)
+  claimedAt      DateTime? // When OCI worker claimed the job
+  claimedBy      String?   // Worker id (e.g. hostname)
+  leaseExpiresAt DateTime? // Lease expiry; expired processing jobs can be reclaimed
+  aiImportJobId  String?   // Legacy: old AI service job ID (unused after OCI cutover)
+  aiImportKind   String?   // Legacy: old AI kind (prefer `kind`)
   createdAt      DateTime  @default(now())   // When job was queued
   updatedAt      DateTime  @updatedAt
   startedAt      DateTime? // When status changed to processing
   completedAt    DateTime? // When status changed to completed or failed
   user           User      @relation(fields: [userId], references: [id])
+
+  @@index([status, leaseExpiresAt])
+  @@index([status, createdAt])
 }

@@ -4,6 +4,11 @@ node_modules
 .supabase
 .supabase-target-url
 .wasabi.yaml
+.nvidia.yaml
+.groq.yaml
+.oci/
+workers/oci-import/.env
+workers/oci-import/.venv/
 
 uploads/
 __pycache__/
@@ -19,3 +24,16 @@ web/dist/
 # E2E failure artifacts
 tests/screenshots/*.png
 .vercel
+backups/
+
+# Terraform (gcp-import)
+infra/gcp-import/.terraform/
+infra/gcp-import/.build/
+infra/gcp-import/*.tfstate*
+infra/gcp-import/terraform.tfvars
+
+.DS_Store
+.idea/infra/gcp-import/tfplan
+workers/oci-import/ampere-retry.sh
+workers/oci-import/metrobistro-oci-import.service
+workers/oci-import/systemd/
