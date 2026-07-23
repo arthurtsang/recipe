@@ -64,6 +64,26 @@ const ImportRecipe: React.FC<ImportRecipeProps> = ({ open, onClose }) => {
   const [savingRecipeId, setSavingRecipeId] = useState<string | null>(null);
   const [activeJobs, setActiveJobs] = useState<JobStatus[]>([]);
   const [notification, setNotification] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const jobFromStartResponse = (
+    data: {
+      jobId?: string;
+      status?: string;
+      jobIds?: string[];
+      jobs?: Array<{ jobId?: string; status?: string }>;
+    },
+    sourceUrl: string
+  ): JobStatus | null => {
+    const jobId = data.jobs?.[0]?.jobId || data.jobIds?.[0] || data.jobId;
+    if (!jobId) return null;
+    return {
+      jobId,
+      url: sourceUrl,
+      status: data.jobs?.[0]?.status || data.status || 'pending',
+      message: 'Queued and waiting...',
+    };
+  };
 
   // Poll for job status for all active jobs
   useEffect(() => {
@@ -162,6 +182,7 @@ const ImportRecipe: React.FC<ImportRecipeProps> = ({ open, onClose }) => {
     }
 
     setError(null);
+    setSubmitting(true);
 
     try {
       // For bulk imports, call the single URL API multiple times
@@ -201,13 +222,11 @@ const ImportRecipe: React.FC<ImportRecipeProps> = ({ open, onClose }) => {
               throw new Error('Empty response from server');
             }
             const data = JSON.parse(text);
-            
-            return {
-              jobId: data.jobId,
-              url: url,
-              status: data.status,
-              message: 'Queued and waiting...'
-            };
+            const job = jobFromStartResponse(data, url);
+            if (!job) {
+              throw new Error('Server did not return a job id');
+            }
+            return job;
           } catch (err) {
             console.error(`Failed to start import for ${url}:`, err);
             return {
@@ -235,6 +254,9 @@ const ImportRecipe: React.FC<ImportRecipeProps> = ({ open, onClose }) => {
         
         if (successfulJobs.length > 0) {
           setNotification(`${successfulJobs.length} import job${successfulJobs.length > 1 ? 's' : ''} started!`);
+          setUrl('');
+          setUrlsText('');
+          onClose();
         }
       } else {
         // Single URL import
@@ -268,22 +290,20 @@ const ImportRecipe: React.FC<ImportRecipeProps> = ({ open, onClose }) => {
           throw new Error('Empty response from server');
         }
         const data = JSON.parse(text);
-        
-        const newJob: JobStatus = {
-          jobId: data.jobId,
-          url: urlsToImport[0],
-          status: data.status,
-          message: 'Queued and waiting...'
-        };
+        const newJob = jobFromStartResponse(data, urlsToImport[0]);
+        if (!newJob) {
+          throw new Error('Server did not return a job id');
+        }
         setActiveJobs(prev => [...prev, newJob]);
-        setNotification('Import job started!');
+        setNotification('Import queued — check Import History for progress.');
+        setUrl('');
+        setUrlsText('');
+        onClose();
       }
-      
-      // Clear the input fields
-      setUrl('');
-      setUrlsText('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start import');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -329,14 +349,9 @@ const ImportRecipe: React.FC<ImportRecipeProps> = ({ open, onClose }) => {
       });
       
       setNotification(`Recipe "${imported.recipe.title}" saved successfully!`);
-      
-      // If this was the last recipe and dialog should close
-      if (importedRecipes.size === 1 && activeJobs.length === 0) {
-        setTimeout(() => {
-          onClose();
-          navigate(`/recipes/${data.id}`);
-        }, 1000);
-      } else {
+      // Always close before navigate — an open Dialog backdrop covers the next page.
+      onClose();
+      if (data?.id) {
         navigate(`/recipes/${data.id}`);
       }
     } catch (err) {
@@ -376,6 +391,7 @@ const ImportRecipe: React.FC<ImportRecipeProps> = ({ open, onClose }) => {
   }, [open]);
 
   return (
+    <>
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>{t('importRecipe', 'Import Recipe')}</DialogTitle>
       <DialogContent>
@@ -420,9 +436,10 @@ const ImportRecipe: React.FC<ImportRecipeProps> = ({ open, onClose }) => {
               <Button
                 variant="contained"
                 onClick={handleImport}
-                disabled={!url.trim()}
+                disabled={!url.trim() || submitting}
+                startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : null}
               >
-                {t('import', 'Import')}
+                {submitting ? 'Queuing…' : t('import', 'Import')}
               </Button>
             </>
           ) : (
@@ -440,9 +457,12 @@ const ImportRecipe: React.FC<ImportRecipeProps> = ({ open, onClose }) => {
               <Button
                 variant="contained"
                 onClick={handleImport}
-                disabled={!urlsText.trim()}
+                disabled={!urlsText.trim() || submitting}
+                startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : null}
               >
-                Import All ({parseUrls(urlsText).length} URLs)
+                {submitting
+                  ? 'Queuing…'
+                  : `Import All (${parseUrls(urlsText).length} URLs)`}
               </Button>
               {urlsText.trim() && (
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
@@ -466,12 +486,13 @@ const ImportRecipe: React.FC<ImportRecipeProps> = ({ open, onClose }) => {
             </Typography>
             <Box sx={{ maxHeight: 300, overflowY: 'auto' }}>
               {activeJobs.map((job) => (
-                <Alert key={job.jobId} severity="info" sx={{ mb: 1 }}>
+                <Alert key={job.jobId || job.url} severity="info" sx={{ mb: 1 }}>
                   <Typography variant="body2" fontWeight="bold">
                     {job.url.length > 60 ? job.url.substring(0, 57) + '...' : job.url}
                   </Typography>
                   <Typography variant="body2">
-                    Status: {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+                    Status: {(job.status || 'pending').charAt(0).toUpperCase() +
+                      (job.status || 'pending').slice(1)}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     {job.message}
@@ -570,14 +591,14 @@ const ImportRecipe: React.FC<ImportRecipeProps> = ({ open, onClose }) => {
           {t('close', 'Close')}
         </Button>
       </DialogActions>
-      
-      <Snackbar
-        open={!!notification}
-        autoHideDuration={6000}
-        onClose={() => setNotification(null)}
-        message={notification}
-      />
     </Dialog>
+    <Snackbar
+      open={!!notification}
+      autoHideDuration={6000}
+      onClose={() => setNotification(null)}
+      message={notification}
+    />
+    </>
   );
 };
 

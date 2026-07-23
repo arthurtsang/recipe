@@ -1,5 +1,6 @@
 import express from 'express';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
 import recipeRoutes from './routes/recipes';
 import path from 'path';
 import { auth, requiresAuth } from 'express-openid-connect';
@@ -9,10 +10,9 @@ import cors from 'cors';
 import * as userService from './services/userService';
 import tagRoutes from './routes/tags';
 import {
-  startImportJobOnly,
-  ensureAtMostOneProcessing,
   processPendingImportJobs,
-  pollProcessingImportJob,
+  reclaimExpiredLeases,
+  requeueImportJob,
 } from './services/importJobService';
 import { findRecipesNeedingAnalysis, processRecipeAnalysisQueue } from './services/recipeAnalysisService';
 import { backupDatabaseToWasabi } from './services/databaseBackupService';
@@ -24,7 +24,10 @@ import { requiresEnabledUser, requiresAdmin } from './middleware/auth';
 import { requireCronSecret } from './middleware/cronAuth';
 import importJobRoutes from './routes/importJobs';
 
-dotenv.config({ path: path.join(__dirname, '../.env') });
+// Local only — on Vercel, project env vars are already injected (avoid .env clobbering).
+if (!process.env.VERCEL) {
+  dotenv.config({ path: path.join(__dirname, '../.env') });
+}
 
 const googleClientId = requireEnv('GOOGLE_CLIENT_ID');
 const googleClientSecret = requireEnv('GOOGLE_CLIENT_SECRET');
@@ -51,6 +54,11 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 const baseUrl = getBaseUrl();
+console.log('[oidc] baseURL', baseUrl, {
+  vercelEnv: process.env.VERCEL_ENV,
+  baseUrlLen: process.env.BASE_URL?.length ?? 0,
+  previewBaseUrlLen: process.env.PREVIEW_BASE_URL?.length ?? 0,
+});
 
 app.use(
   auth({
@@ -156,8 +164,13 @@ app.get('/api/me', requiresAuth(), async (req: any, res) => {
     const name = req.oidc?.user?.name ?? dbUser.name ?? undefined;
     const displayName = userService.userDisplayName({ ...dbUser, name });
 
+    // Never expose apiToken on /api/me — use GET /api/me/token
+    const { apiToken: _apiToken, ...safeUser } = dbUser as typeof dbUser & {
+      apiToken?: string | null;
+    };
+
     res.json({
-      ...dbUser,
+      ...safeUser,
       picture,
       name,
       alias: dbUser.alias ?? undefined,
@@ -168,6 +181,44 @@ app.get('/api/me', requiresAuth(), async (req: any, res) => {
   } catch (err) {
     console.error('/api/me error:', err);
     res.status(500).json({ error: 'Failed to get user info' });
+  }
+});
+
+/** Current user's API token (for agent/script Bearer auth). */
+app.get('/api/me/token', requiresAuth(), requiresEnabledUser(), async (req: any, res) => {
+  try {
+    const email = req.oidc?.user?.email?.toLowerCase();
+    if (!email) return res.status(401).json({ error: 'No email' });
+    const dbUser = await prisma.user.findUnique({
+      where: { email },
+      select: { apiToken: true },
+    });
+    if (!dbUser) return res.status(404).json({ error: 'User not found' });
+    res.json({ apiToken: dbUser.apiToken ?? null });
+  } catch (err) {
+    console.error('/api/me/token error:', err);
+    res.status(500).json({ error: 'Failed to get API token' });
+  }
+});
+
+/** Generate a new API token (invalidates the previous one). */
+app.post('/api/me/token/refresh', requiresAuth(), requiresEnabledUser(), async (req: any, res) => {
+  try {
+    const email = req.oidc?.user?.email?.toLowerCase();
+    if (!email) return res.status(401).json({ error: 'No email' });
+    const apiToken = crypto.randomBytes(32).toString('hex');
+    const updated = await prisma.user.update({
+      where: { email },
+      data: { apiToken },
+      select: { apiToken: true },
+    });
+    res.json({ apiToken: updated.apiToken });
+  } catch (err: any) {
+    if (err?.code === 'P2025') {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    console.error('/api/me/token/refresh error:', err);
+    res.status(500).json({ error: 'Failed to refresh API token' });
   }
 });
 
@@ -220,7 +271,7 @@ app.patch('/api/admin/users/:id/enable', requiresAuth(), requiresAdmin(), async 
 
 app.get('/api/admin/queues', requiresAuth(), requiresAdmin(), async (_req, res) => {
   try {
-    await ensureAtMostOneProcessing();
+    await reclaimExpiredLeases();
     const [pendingJobs, processingJobs, recentFailed, recentCompleted, pendingRecipeIds, recentAnalyzed] =
       await Promise.all([
         prisma.importJob.findMany({
@@ -229,6 +280,8 @@ app.get('/api/admin/queues', requiresAuth(), requiresAdmin(), async (_req, res) 
           select: {
             id: true,
             url: true,
+            kind: true,
+            step: true,
             userId: true,
             createdAt: true,
             updatedAt: true,
@@ -243,6 +296,10 @@ app.get('/api/admin/queues', requiresAuth(), requiresAdmin(), async (_req, res) 
           select: {
             id: true,
             url: true,
+            kind: true,
+            step: true,
+            claimedBy: true,
+            leaseExpiresAt: true,
             userId: true,
             createdAt: true,
             updatedAt: true,
@@ -326,12 +383,17 @@ app.post('/api/admin/import-jobs/retry-all', requiresAuth(), requiresAdmin(), as
       where: { status: 'failed' },
       data: {
         status: 'pending',
+        step: 'queued',
         error: null,
         result: null,
         startedAt: null,
         completedAt: null,
         savedRecipeId: null,
+        claimedAt: null,
+        claimedBy: null,
+        leaseExpiresAt: null,
         aiImportJobId: null,
+        aiImportKind: null,
         updatedAt: new Date(),
       },
     });
@@ -345,28 +407,9 @@ app.post('/api/admin/import-jobs/retry-all', requiresAuth(), requiresAdmin(), as
 app.post('/api/admin/import-jobs/:id/retry', requiresAuth(), requiresAdmin(), async (req, res) => {
   try {
     const { id } = req.params;
-    const job = await prisma.importJob.findUnique({ where: { id } });
+    const job = await requeueImportJob(id);
     if (!job) return res.status(404).json({ error: 'Import job not found' });
-    try {
-      await prisma.importJob.update({
-        where: { id },
-        data: {
-          status: 'pending',
-          error: null,
-          result: null,
-          startedAt: null,
-          completedAt: null,
-          savedRecipeId: null,
-          aiImportJobId: null,
-          updatedAt: new Date(),
-        },
-      });
-    } catch (e: any) {
-      if (e?.code === 'P2025') return res.status(404).json({ error: 'Import job not found' });
-      throw e;
-    }
-    startImportJobOnly(id).catch((err) => console.error(`[IMPORT] Admin retry job ${id}:`, err));
-    res.json({ message: 'Job queued for retry', jobId: id });
+    res.json({ message: 'Job queued for import worker', jobId: id });
   } catch (error) {
     console.error('Error retrying import job:', error);
     res.status(500).json({ error: 'Failed to retry job' });
@@ -385,8 +428,8 @@ app.get('/api/health', async (_req, res) => {
 
 app.get('/api/cron/daily', requireCronSecret, async (_req, res) => {
   try {
+    await reclaimExpiredLeases();
     await processPendingImportJobs();
-    await pollProcessingImportJob();
     await processRecipeAnalysisQueue();
     res.json({ ok: true });
   } catch (err) {
@@ -397,9 +440,8 @@ app.get('/api/cron/daily', requireCronSecret, async (_req, res) => {
 
 app.get('/api/cron/import-jobs', requireCronSecret, async (_req, res) => {
   try {
-    await processPendingImportJobs();
-    await pollProcessingImportJob();
-    res.json({ ok: true });
+    const reclaimed = await reclaimExpiredLeases();
+    res.json({ ok: true, reclaimed });
   } catch (err) {
     console.error('[cron] import-jobs error:', err);
     res.status(500).json({ error: 'Cron failed' });

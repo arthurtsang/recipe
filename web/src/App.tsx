@@ -51,9 +51,11 @@ function App() {
   const { t } = useTranslation();
 
   useEffect(() => {
-    setAuthResolved(false);
+    // Only block UI on the first auth resolve; later navigations refresh quietly.
+    let cancelled = false;
     fetch('/api/me', { credentials: 'include' })
       .then(async res => {
+        if (cancelled) return;
         if (res.ok) {
           const data = await res.json();
           setUser(data); // backend now returns the user object directly
@@ -61,8 +63,15 @@ function App() {
           setUser(null);
         }
       })
-      .catch(() => setUser(null))
-      .finally(() => setAuthResolved(true));
+      .catch(() => {
+        if (!cancelled) setUser(null);
+      })
+      .finally(() => {
+        if (!cancelled) setAuthResolved(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [location]);
 
   useEffect(() => {

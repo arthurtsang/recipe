@@ -4,9 +4,8 @@ import { prisma } from '../lib/prisma';
 import { 
   createImportJob, 
   getImportJob, 
-  getUserImportJobs, 
-  processImportJob,
-  pollProcessingImportJob,
+  getUserImportJobs,
+  reclaimExpiredLeases,
   updateImportJobSavedRecipe
 } from '../services/importJobService';
 import { downloadAndSaveImage } from './recipeController';
@@ -52,10 +51,17 @@ export async function startImport(req: Request, res: Response) {
     
     // Single endpoint: body is { urls: string[] }. One URL = [url].
     const raw = req.body?.urls ?? req.body?.url;
+    const normalizeUrl = (u: string) => {
+      const trimmed = u.trim();
+      if (/^https?:\/\//i.test(trimmed)) return trimmed;
+      return `https://${trimmed}`;
+    };
     const urlList: string[] = Array.isArray(raw)
-      ? raw.filter((u: unknown) => typeof u === 'string' && (u as string).trim()).map((u: string) => (u as string).trim())
+      ? raw
+          .filter((u: unknown) => typeof u === 'string' && (u as string).trim())
+          .map((u: string) => normalizeUrl(u))
       : typeof raw === 'string' && raw.trim()
-        ? [raw.trim()]
+        ? [normalizeUrl(raw)]
         : [];
 
     if (urlList.length === 0) {
@@ -66,19 +72,17 @@ export async function startImport(req: Request, res: Response) {
       urlList.map((url) => createImportJob(dbUser.id, url))
     );
 
-    jobs.slice(0, 3).forEach((job) => {
-      processImportJob(job.id).catch((err) => console.error(`[IMPORT] Job ${job.id} failed:`, err));
-    });
-    jobs.slice(3).forEach((job, index) => {
-      setTimeout(() => {
-        processImportJob(job.id).catch((err) => console.error(`[IMPORT] Job ${job.id} failed:`, err));
-      }, (index + 1) * 5000);
-    });
-
+    // Import worker is triggered via Pub/Sub → Cloud Run Job.
     res.json({
       jobIds: jobs.map((j) => j.id),
-      jobs: jobs.map((j) => ({ jobId: j.id, url: j.url, status: j.status })),
-      message: jobs.length === 1 ? 'Import job started' : `${jobs.length} import jobs started`,
+      jobs: jobs.map((j) => ({
+        jobId: j.id,
+        url: j.url,
+        status: j.status,
+        kind: j.kind,
+        step: j.step,
+      })),
+      message: jobs.length === 1 ? 'Import job queued' : `${jobs.length} import jobs queued`,
     });
 
   } catch (error) {
@@ -102,8 +106,8 @@ export async function getImportStatus(req: Request, res: Response) {
 
     const { jobId } = req.params;
 
-    // Poll AI status when the client checks progress (Hobby plan allows only daily crons).
-    await pollProcessingImportJob();
+    // Safety net: reclaim expired worker leases when clients poll.
+    await reclaimExpiredLeases();
 
     const job = await getImportJob(jobId);
 
@@ -120,10 +124,14 @@ export async function getImportStatus(req: Request, res: Response) {
       id: job.id,
       url: job.url,
       status: job.status,
+      kind: job.kind,
+      step: job.step,
       result: job.result,
       error: job.error,
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
+      startedAt: job.startedAt ?? null,
+      completedAt: job.completedAt ?? null,
     });
 
   } catch (error) {
@@ -151,13 +159,15 @@ export async function getUserImports(req: Request, res: Response) {
       id: job.id,
       url: job.url,
       status: job.status,
+      kind: job.kind,
+      step: job.step,
       result: job.result,
       error: job.error,
-      savedRecipeId: (job as any).savedRecipeId || null,
+      savedRecipeId: job.savedRecipeId || null,
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
-      startedAt: (job as any).startedAt ?? null,
-      completedAt: (job as any).completedAt ?? null,
+      startedAt: job.startedAt ?? null,
+      completedAt: job.completedAt ?? null,
     })));
 
   } catch (error) {

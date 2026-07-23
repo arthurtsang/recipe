@@ -4,6 +4,10 @@ node_modules
 .supabase
 .supabase-target-url
 .wasabi.yaml
+.nvidia.yaml
+.groq.yaml
+workers/import/.env
+workers/import/.venv/
 
 uploads/
 __pycache__/
@@ -18,4 +22,17 @@ web/dist/
 
 # E2E failure artifacts
 tests/screenshots/*.png
+tests/storage-state.json
 .vercel
+backups/
+
+# Terraform (gcp-import)
+infra/gcp-import/.terraform/
+infra/gcp-import/.build/
+infra/gcp-import/*.tfstate*
+infra/gcp-import/terraform.tfvars
+
+.DS_Store
+.idea/infra/gcp-import/tfplan
+
+tfplan*

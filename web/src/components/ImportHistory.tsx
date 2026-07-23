@@ -306,6 +306,8 @@ const ImportHistory: React.FC<ImportHistoryProps> = ({ open, onClose }) => {
                         href={`/recipes/${job.savedRecipeId}`}
                         onClick={(e) => {
                           e.preventDefault();
+                          // Close dialog first — otherwise the Modal backdrop stays and looks like a black page.
+                          onClose();
                           navigate(`/recipes/${job.savedRecipeId}`);
                         }}
                         sx={{

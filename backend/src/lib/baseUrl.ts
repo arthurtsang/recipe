@@ -2,18 +2,37 @@ import type { Request } from 'express';
 
 import { env } from './env';
 
-/** Public app URL — set BASE_URL in env (e.g. https://recipe.example.com). */
+/** Stable Preview host (Google OAuth redirect URI). Avoids per-branch *.vercel.app URLs. */
+const PREVIEW_STABLE_BASE_URL = 'https://recipe-preview.youramaryllis.com';
+
+function httpsHost(hostOrUrl: string): string {
+  const stripped = hostOrUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  return `https://${stripped}`;
+}
+
+/**
+ * Public app URL used for OIDC baseURL / redirects.
+ *
+ * Preview: always use the stable custom domain (env override allowed) so Google
+ * redirect_uri matches a single registered URI. Never use Production BASE_URL
+ * or per-branch VERCEL_BRANCH_URL on Preview.
+ */
 export function getBaseUrl(): string {
+  if (process.env.VERCEL_ENV === 'preview') {
+    const stable =
+      env('PREVIEW_BASE_URL') || env('BASE_URL') || PREVIEW_STABLE_BASE_URL;
+    return stable.replace(/\/+$/, '');
+  }
+
   const fromEnv = env('BASE_URL');
   if (fromEnv) return fromEnv.replace(/\/+$/, '');
+
   const vercelProduction = env('VERCEL_PROJECT_PRODUCTION_URL');
-  if (vercelProduction) {
-    return `https://${vercelProduction.replace(/^https?:\/\//, '')}`;
-  }
+  if (vercelProduction) return httpsHost(vercelProduction);
+
   const vercelUrl = env('VERCEL_URL');
-  if (vercelUrl) {
-    return `https://${vercelUrl.replace(/^https?:\/\//, '')}`;
-  }
+  if (vercelUrl) return httpsHost(vercelUrl);
+
   return 'http://localhost:4000';
 }
 
@@ -31,6 +50,10 @@ export function getRequestOrigin(req: Request): string {
 
 export function corsOrigins(): string[] {
   const origins = new Set<string>([getBaseUrl()]);
+  const base = env('BASE_URL');
+  if (base) origins.add(base.replace(/\/+$/, ''));
+  const preview = env('PREVIEW_BASE_URL');
+  if (preview) origins.add(preview.replace(/\/+$/, ''));
   if (process.env.NODE_ENV !== 'production') {
     origins.add('http://localhost:4000');
     origins.add('http://localhost:5173');

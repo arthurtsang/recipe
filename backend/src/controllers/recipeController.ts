@@ -735,26 +735,25 @@ export async function getRecipesByAlias(req: Request, res: Response) {
   }
 }
 
+/** Legacy sync import endpoint — use POST /api/imports/start (async queue) instead. */
 export async function importRecipe(req: Request, res: Response) {
   try {
     const { url } = req.body;
     if (!url) return res.status(400).json({ error: 'URL is required' });
-    
-    // Call AI service to import recipe from external site
-    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
-    const response = await axios.post(`${aiServiceUrl}/recipe/import`, { url });
-    
-    const importedData = response.data;
-    
-    // Don't download the image here - just return the external URL for preview
-    // The image will be downloaded when the user actually saves the recipe
-    
-    res.status(200).json(importedData);
+    const email = (req as any).oidc?.user?.email;
+    if (!email) return res.status(401).json({ error: 'Not authenticated' });
+    const dbUser = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (!dbUser) return res.status(401).json({ error: 'User not found' });
+    const { createImportJob } = await import('../services/importJobService');
+    const job = await createImportJob(dbUser.id, url);
+    res.status(202).json({
+      jobId: job.id,
+      status: job.status,
+      kind: job.kind,
+      step: job.step,
+      message: 'Import queued for Cloud Run worker; poll GET /api/imports/:jobId',
+    });
   } catch (err: unknown) {
-    if (err && typeof err === 'object' && 'response' in err) {
-      const axiosError = err as { response: { status: number; data: any } };
-      return res.status(axiosError.response.status).json(axiosError.response.data);
-    }
     console.error('Error importing recipe:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -766,15 +765,24 @@ export async function autoCategory(req: Request, res: Response) {
     if (!title && !description && !ingredients && !instructions) {
       return res.status(400).json({ error: 'At least one field is required' });
     }
-    // Call AI service for category prediction
-    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
-    const response = await axios.post(`${aiServiceUrl}/recipe/auto-category`, { title, description, ingredients, instructions });
-    res.status(200).json(response.data);
+    const { extractJsonObject, nvidiaChat } = await import('../lib/nvidia');
+    const prompt = `Analyze this recipe and suggest appropriate categories:
+
+Title: ${title || 'N/A'}
+Description: ${description || 'N/A'}
+Ingredients: ${ingredients || 'N/A'}
+Instructions: ${instructions || 'N/A'}
+
+Suggest 3-5 relevant categories. Return ONLY a JSON object with a "categories" field containing an array of category names.
+Example: {"categories": ["Main Course", "Italian", "Pasta", "Vegetarian"]}`;
+    const raw = await nvidiaChat([{ role: 'user', content: prompt }], { temperature: 0.3, maxTokens: 256 });
+    const parsed = extractJsonObject(raw);
+    const categories = Array.isArray(parsed?.categories)
+      ? (parsed!.categories as unknown[]).map(String)
+      : ['General'];
+    res.status(200).json({ categories });
   } catch (err: unknown) {
-    if (err && typeof err === 'object' && 'response' in err) {
-      const axiosError = err as any;
-      res.status(axiosError.response?.status || 500).json({ error: axiosError.response?.data?.error || axiosError.message });
-    } else if (err instanceof Error) {
+    if (err instanceof Error) {
       res.status(500).json({ error: err.message });
     } else {
       res.status(500).json({ error: 'Failed to auto-categorize recipe' });
@@ -788,20 +796,18 @@ export async function chat(req: Request, res: Response) {
     if (!question) {
       return res.status(400).json({ error: 'Question is required' });
     }
-    
-    // Call AI service for chat (AI returns { response }; frontend expects { answer, recipes })
-    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
-    const response = await axios.post(`${aiServiceUrl}/recipe/chat`, { question });
-    const data = response.data as { response?: string; answer?: string; recipes?: unknown[] };
-    res.status(200).json({
-      answer: data.answer ?? data.response ?? '',
-      recipes: data.recipes ?? [],
+    const { nvidiaChat } = await import('../lib/nvidia');
+    const prompt =
+      'You are a helpful cooking assistant. Answer questions about recipes, ' +
+      'cooking techniques, ingredients, and meal planning. Be friendly, informative, and concise.\n\n' +
+      `Question: ${question}\n\nAnswer:`;
+    const answer = await nvidiaChat([{ role: 'user', content: prompt }], {
+      temperature: 0.7,
+      maxTokens: 512,
     });
+    res.status(200).json({ answer, recipes: [] });
   } catch (err: unknown) {
-    if (err && typeof err === 'object' && 'response' in err) {
-      const axiosError = err as any;
-      res.status(axiosError.response?.status || 500).json({ error: axiosError.response?.data?.error || axiosError.message });
-    } else if (err instanceof Error) {
+    if (err instanceof Error) {
       res.status(500).json({ error: err.message });
     } else {
       res.status(500).json({ error: 'Failed to get chat response' });

@@ -33,9 +33,6 @@ SESSION_SECRET="metro-bistro-session-secret-change-this-in-production"
 # Admin email (auto-enabled on first login)
 ADMIN_EMAIL=""
 
-# AI Service URL
-AI_SERVICE_URL="http://localhost:8001"
-
 # Allowed emails (comma-separated)
 ALLOWED_EMAILS=""
 
@@ -67,5 +64,4 @@ echo "   4. Create OAuth 2.0 credentials"
 echo "   5. Set authorized redirect URI to: \${BASE_URL}/auth/google/callback"
 echo "   6. Update GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env"
 echo ""
-echo "After configuring, restart the backend:"
-echo "   sudo systemctl restart metro-bistro-backend"
+echo "After configuring locally: npm run dev (or redeploy on Vercel)."

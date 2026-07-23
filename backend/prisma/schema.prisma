@@ -5,62 +5,69 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["metrobistro", "public"]
 }
 
 model User {
-  id           String    @id @default(uuid())
-  email        String    @unique
+  id           String      @id @default(uuid())
+  email        String      @unique
   name         String?
-  alias        String?   @unique
+  alias        String?     @unique
   picture      String?
   oidcProvider String
   oidcSub      String
-  apiToken     String?   @unique  // API token for programmatic access
-  isEnabled    Boolean   @default(false)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  apiToken     String?     @unique // API token for programmatic access
+  isEnabled    Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
   comments     Comment[]
   ratings      Rating[]
   recipes      Recipe[]
   importJobs   ImportJob[]
+
+  @@schema("metrobistro")
 }
 
 model Recipe {
-  id               String          @id @default(uuid())
-  userId           String
-  title            String
-  description      String?
-  imageUrl         String?
-  sourceUrl        String?         // Original URL if imported from external site
-  estimatedTime    String?         // e.g., "15-30 min", "45-60 min"
-  difficulty       String?         // "Easy", "Medium", "Advanced"
-  timeReasoning    String?         // LLM reasoning for estimated time
-  difficultyReasoning String?      // LLM reasoning for difficulty
-  currentVersionId String?         @unique
-  isPublic         Boolean         @default(true)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  comments         Comment[]
-  ratings          Rating[]
-  currentVersion   RecipeVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id])
-  user             User            @relation(fields: [userId], references: [id])
-  tags             RecipeTag[]
-  versions         RecipeVersion[] @relation("RecipeVersions")
+  id                  String          @id @default(uuid())
+  userId              String
+  title               String
+  description         String?
+  imageUrl            String?
+  sourceUrl           String? // Original URL if imported from external site
+  estimatedTime       String? // e.g., "15-30 min", "45-60 min"
+  difficulty          String? // "Easy", "Medium", "Advanced"
+  timeReasoning       String? // LLM reasoning for estimated time
+  difficultyReasoning String? // LLM reasoning for difficulty
+  currentVersionId    String?         @unique
+  isPublic            Boolean         @default(true)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  comments            Comment[]
+  ratings             Rating[]
+  currentVersion      RecipeVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  user                User            @relation(fields: [userId], references: [id])
+  tags                RecipeTag[]
+  versions            RecipeVersion[] @relation("RecipeVersions")
+
+  @@schema("metrobistro")
 }
 
 model RecipeVersion {
-  id            String   @id @default(uuid())
-  recipe        Recipe   @relation("RecipeVersions", fields: [recipeId], references: [id], onDelete: Cascade)
-  recipeId      String
-  name   String?  // Version name
-  title         String
-  ingredients   String
-  instructions  String
-  description   String?
-  imageUrl      String?
-  createdAt     DateTime @default(now())
-  aiTags        Tag[]    @relation("VersionTags")
-  currentFor    Recipe?  @relation("CurrentVersion")
+  id           String   @id @default(uuid())
+  recipe       Recipe   @relation("RecipeVersions", fields: [recipeId], references: [id], onDelete: Cascade)
+  recipeId     String
+  name         String? // Version name
+  title        String
+  ingredients  String
+  instructions String
+  description  String?
+  imageUrl     String?
+  createdAt    DateTime @default(now())
+  aiTags       Tag[]    @relation("VersionTags")
+  currentFor   Recipe?  @relation("CurrentVersion")
+
+  @@schema("metrobistro")
 }
 
 model Rating {
@@ -73,6 +80,7 @@ model Rating {
   user      User     @relation(fields: [userId], references: [id])
 
   @@unique([userId, recipeId])
+  @@schema("metrobistro")
 }
 
 model Comment {
@@ -83,6 +91,8 @@ model Comment {
   createdAt DateTime @default(now())
   recipe    Recipe   @relation(fields: [recipeId], references: [id])
   user      User     @relation(fields: [userId], references: [id])
+
+  @@schema("metrobistro")
 }
 
 model Tag {
@@ -90,6 +100,8 @@ model Tag {
   name     String          @unique
   recipes  RecipeTag[]
   versions RecipeVersion[] @relation("VersionTags")
+
+  @@schema("metrobistro")
 }
 
 model RecipeTag {
@@ -98,6 +110,8 @@ model RecipeTag {
   tagId    String
   recipe   Recipe @relation(fields: [recipeId], references: [id])
   tag      Tag    @relation(fields: [tagId], references: [id])
+
+  @@schema("metrobistro")
 }
 
 model ImportJob {
@@ -105,14 +119,23 @@ model ImportJob {
   userId         String
   url            String
   status         String    @default("pending") // pending, processing, completed, failed
-  result         Json?     // Stores the imported recipe data
-  error          String?   // Error message if failed
-  savedRecipeId  String?   // ID of the recipe if it was saved from this import
-  aiImportJobId  String?   // AI service job ID when async; used to resume polling after restart
-  aiImportKind   String?   // 'url' | 'video' – which AI endpoint to poll; null = url (backward compat)
-  createdAt      DateTime  @default(now())   // When job was queued
+  kind           String    @default("url") // 'url' | 'video'
+  step           String    @default("queued") // queued | claimed | fetching | ...
+  result         Json? // Stores the imported recipe data
+  error          String? // Error message if failed
+  savedRecipeId  String? // ID of the recipe if it was saved from this import
+  claimedAt      DateTime? // When worker claimed the job
+  claimedBy      String? // Worker id (e.g. hostname)
+  leaseExpiresAt DateTime? // Lease expiry; expired processing jobs can be reclaimed
+  aiImportJobId  String? // Legacy AI service job ID
+  aiImportKind   String? // Legacy AI kind (prefer `kind`)
+  createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
-  startedAt      DateTime? // When status changed to processing
-  completedAt    DateTime? // When status changed to completed or failed
+  startedAt      DateTime?
+  completedAt    DateTime?
   user           User      @relation(fields: [userId], references: [id])
+
+  @@index([status, leaseExpiresAt])
+  @@index([status, createdAt])
+  @@schema("metrobistro")
 }
