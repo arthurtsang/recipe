@@ -2,6 +2,9 @@
 /**
  * Run prisma migrate deploy using DIRECT_DATABASE_URL when set (session/direct connection).
  * Transaction pooler (port 6543) must not be used for migrations.
+ *
+ * Prisma migration history lives in public._prisma_migrations. App data may use
+ * ?schema=metrobistro — strip/override that for migrate so persistence initializes.
  */
 const { execSync } = require('child_process');
 
@@ -25,7 +28,12 @@ try {
   if (!u.searchParams.has('sslmode')) {
     u.searchParams.set('sslmode', 'require');
   }
+  // Keep migration table on public regardless of app schema.
+  u.searchParams.set('schema', 'public');
   process.env.DATABASE_URL = u.toString();
+  // Avoid Prisma preferring DIRECT_DATABASE_URL with schema=metrobistro over our rewrite.
+  delete process.env.DIRECT_DATABASE_URL;
+  console.log('[migrate] Using schema=public for prisma migrate deploy');
 } catch {
   console.error('[migrate] DATABASE_URL is not a valid URL');
   process.exit(1);
