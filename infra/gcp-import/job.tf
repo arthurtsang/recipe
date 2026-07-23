@@ -22,8 +22,9 @@ resource "google_cloud_run_v2_job" "import_worker" {
         }
 
         env {
+          # Flip after public→metrobistro data copy on prod (see docs/AI_SERVICE_MIGRATION.md).
           name  = "IMPORT_SCHEMA"
-          value = "public"
+          value = "metrobistro"
         }
 
         env {

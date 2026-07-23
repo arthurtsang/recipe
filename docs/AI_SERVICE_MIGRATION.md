@@ -33,8 +33,17 @@ Infra source of truth: [`infra/gcp-import/`](../infra/gcp-import/) (Terraform).
 
 | Environment | Supabase | Postgres schema | Cloud Run Job |
 |-------------|----------|-----------------|---------------|
-| Production | Prod project | `public` (existing tables; do not drop) | `metrobistro-import` |
+| Production | Prod project | `metrobistro` (after cutover; `public.*` left intact) | `metrobistro-import` (`IMPORT_SCHEMA=metrobistro`) |
 | Preview / non-prod | Dev project | `metrobistro` | `metrobistro-import-dev` |
+
+### Prod schema cutover (no data loss)
+
+1. Tag/release current `main` (rollback point).
+2. `npm run migrate:deploy` — applies ImportJob claim columns on `public` (if needed) and creates empty `metrobistro.*` tables. **Does not drop or move `public` tables.**
+3. Dry-run then copy: `npm run copy:public-to-metrobistro -- --dry-run` then `npm run copy:public-to-metrobistro`.
+4. Point Production `DATABASE_URL` / `DIRECT_DATABASE_URL` at `?schema=metrobistro`.
+5. Set Cloud Run Job `IMPORT_SCHEMA=metrobistro` for `metrobistro-import`.
+6. Deploy app. Keep `public.*` until verified; drop later only if desired.
 
 Vercel: set `DATABASE_URL` / `DIRECT_DATABASE_URL` per environment. Preview must **not** point at prod. Never run `migrate:deploy` against prod from Preview.
 
