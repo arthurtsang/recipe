@@ -1,69 +1,61 @@
-# Recipe App E2E Tests
+# Recipe App E2E / BDD Tests
 
-BDD tests (Cucumber + Playwright) against the **Vercel preview / Dev Supabase** environment.
+Cucumber tests against **Vercel Preview** ([recipe-preview.youramaryllis.com](https://recipe-preview.youramaryllis.com)) and **Dev Supabase**.
 
-## Prerequisites
+## Default: API tests (`@api`)
 
-- Node.js 18+
-- Access to the preview app (default: `https://recipe-preview.youramaryllis.com`)
-- A saved Playwright storage state for authenticated scenarios (see below)
-
-## Quick Start
+No browser, no Google OAuth. Uses the admin user's **API token** (Bearer auth).
 
 ```bash
-cd tests && npm install && npx playwright install chromium
+cd tests && npm install
 
-# Required: target the preview app
-export BASE_URL=https://recipe-preview.youramaryllis.com
+cp env.example .env
+# Edit .env: BASE_URL + API_TOKEN
 
-# Optional: reuse a logged-in browser session for auth-gated scenarios
-export STORAGE_STATE=./storage-state.json
-
-npm test
+npm test                          # all @api features
+npm run test:health               # one feature at a time
+npm run test:import-url
 ```
 
-### Creating `storage-state.json`
-
-One-time login against preview (real Google OAuth):
-
-```bash
-cd tests
-BASE_URL=https://recipe-preview.youramaryllis.com node -e "
-const { chromium } = require('@playwright/test');
-(async () => {
-  const browser = await chromium.launch({ headless: false });
-  const context = await browser.newContext({ baseURL: process.env.BASE_URL });
-  const page = await context.newPage();
-  await page.goto('/');
-  console.log('Log in with Google in the browser window, then return here...');
-  await page.waitForSelector('text=Add Recipe', { timeout: 300000 });
-  await context.storageState({ path: 'storage-state.json' });
-  await browser.close();
-  console.log('Wrote storage-state.json');
-})();
-"
-```
-
-Keep `storage-state.json` out of git (local only).
-
-## Test Structure
-
-- `features/` — Gherkin feature files
-- `step-definitions/` — TypeScript step implementations
-- `support/` — Hooks, world, configuration
-
-## Environment Variables
+### Environment
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `BASE_URL` | Yes | Preview app URL (e.g. `https://recipe-preview.youramaryllis.com`) |
-| `STORAGE_STATE` | For logged-in scenarios | Path to Playwright storage state JSON |
-| `HEADED` | No | Set to `1` for a visible browser |
+| `BASE_URL` | Yes | Preview URL (`https://recipe-preview.youramaryllis.com`) |
+| `API_TOKEN` | Yes for `@api` | 64-char hex from **Manage API Token** (admin user) |
+| `BDD_CLEANUP` | No | Set `0` to keep test recipes/jobs after run |
+| `CUCUMBER_TAGS` | No | Override tag filter (default `@api`) |
 
-## Debugging
+Preview Wasabi uploads use prefix **`dev/recipes`** (`WASABI_KEY_PREFIX` on Vercel Preview only). Production stays `recipes`.
+
+`tests/.env` always wins for `BASE_URL` and `API_TOKEN` (so a shell `BASE_URL` pointing at production does not affect API tests).
+
+## API feature coverage
+
+| Feature file | What it tests |
+|--------------|---------------|
+| `api_health.feature` | `GET /api/health` |
+| `api_recipe_list.feature` | List + search |
+| `api_recipe_crud.feature` | Create, update, new version, delete |
+| `api_import_url.feature` | Import myrecipe.kitchen URL + save |
+| `api_import_video.feature` | Instagram reel (video kind) |
+| `api_reimport.feature` | Same URL → new version |
+| `api_ratings.feature` | Rate recipe |
+| `api_upload.feature` | Image upload to Wasabi |
+
+## Legacy browser tests (`@browser @legacy`)
+
+Require `STORAGE_STATE` from a manual Google login. Not run by default.
 
 ```bash
-HEADED=1 BASE_URL=https://recipe-preview.youramaryllis.com STORAGE_STATE=./storage-state.json npm test
-npx cucumber-js features/authentication.feature
-npm run test:report
+CUCUMBER_TAGS='@browser' STORAGE_STATE=./storage-state.json npm test
+```
+
+## Branch / deploy workflow
+
+Work on a feature branch → push → Vercel **Preview** deploys automatically. Production is unchanged.
+
+```bash
+git checkout -b feature/my-change
+git push -u origin feature/my-change
 ```

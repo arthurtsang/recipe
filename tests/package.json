@@ -6,16 +6,25 @@
   "scripts": {
     "test": "cucumber-js",
     "test:headed": "HEADED=1 cucumber-js",
-    "test:report": "cucumber-js --format html:reports/cucumber-report.html"
+    "test:report": "cucumber-js --format html:reports/cucumber-report.html",
+    "test:health": "cucumber-js features/api_health.feature",
+    "test:recipe-list": "cucumber-js features/api_recipe_list.feature",
+    "test:recipe-crud": "cucumber-js features/api_recipe_crud.feature",
+    "test:import-url": "cucumber-js features/api_import_url.feature",
+    "test:import-video": "cucumber-js features/api_import_video.feature",
+    "test:reimport": "cucumber-js features/api_reimport.feature",
+    "test:ratings": "cucumber-js features/api_ratings.feature",
+    "test:upload": "cucumber-js features/api_upload.feature"
   },
   "dependencies": {
     "@cucumber/cucumber": "^11.0.0",
     "@cucumber/pretty-formatter": "^1.0.0",
-    "@playwright/test": "^1.49.0"
+    "@playwright/test": "^1.49.0",
+    "tsx": "^4.23.1",
+    "typescript": "^5.9.3"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.6.0"
+    "@types/node": "^22.20.1",
+    "ts-node": "^10.9.2"
   }
 }

@@ -1,3 +1,4 @@
+@browser @legacy
 Feature: Recipe Chat
   As a logged-in user, I want to chat with the recipe assistant for cooking help.
 
