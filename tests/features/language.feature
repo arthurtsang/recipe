@@ -1,3 +1,4 @@
+@browser @legacy
 Feature: Language
   As a user, I want to switch between English and Chinese so that I can use the app in my preferred language.
 

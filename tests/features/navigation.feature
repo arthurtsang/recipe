@@ -1,3 +1,4 @@
+@browser @legacy
 Feature: Navigation
   As a user, I want to navigate the app so that I can access different features.
 

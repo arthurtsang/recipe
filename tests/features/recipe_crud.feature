@@ -1,3 +1,4 @@
+@browser @legacy
 Feature: Recipe Create, Read, Update, Delete
   As a logged-in user, I want to create, view, edit, and delete recipes.
 

@@ -1,3 +1,4 @@
+@browser @legacy
 Feature: Admin Features
   As an admin user, I want to manage users and view queue status.
 

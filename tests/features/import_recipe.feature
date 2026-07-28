@@ -1,3 +1,4 @@
+@browser @legacy
 Feature: Import Recipe
   As a logged-in user, I want to import recipes from URLs so that I can save recipes from the web.
 

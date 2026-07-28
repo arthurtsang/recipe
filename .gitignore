@@ -36,3 +36,4 @@ infra/gcp-import/terraform.tfvars
 .idea/infra/gcp-import/tfplan
 
 tfplan*
+.env*

@@ -1,3 +1,4 @@
+@browser @legacy
 Feature: Recipe List
   As a user, I want to browse and search recipes so that I can find dishes I want to make.
 

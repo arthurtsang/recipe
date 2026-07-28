@@ -1,3 +1,4 @@
+@browser @legacy
 Feature: Authentication
   As a user, I want to log in and out so that I can access my recipes and personal features.
 
