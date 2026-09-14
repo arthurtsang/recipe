@@ -4,6 +4,7 @@ import RecipeListItem from '../components/RecipeListItem';
 import { Typography, Box, TextField, Button, Container, CircularProgress } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useRecipeLayout } from '../context/RecipeLayoutContext';
+import { brand } from '../theme';
 
 // Define a Recipe type for better type safety
 interface Recipe {
@@ -100,16 +101,19 @@ export default function RecipeList() {
     >
       <Container maxWidth="lg">
         <Box sx={{ textAlign: 'center', mb: 6 }}>
-          <Typography 
-            variant="h3" 
-            gutterBottom 
-            sx={{ 
-              fontWeight: 700,
+          <Typography
+            component="h1"
+            gutterBottom
+            sx={{
+              fontFamily: brand.wordmarkFont,
+              fontWeight: 400,
+              fontSize: { xs: '1.85rem', sm: '2.4rem' },
               color: 'primary.main',
+              lineHeight: 1.3,
               mb: 2,
             }}
           >
-            {t('recipes')}
+            {t('tagline')}
           </Typography>
           <Typography 
             variant="h6" 
