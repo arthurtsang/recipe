@@ -1,78 +1,91 @@
 import { createTheme } from '@mui/material/styles';
 
+// YourAmaryllis house + Secret Garden mark.
+// Tokens from artifacts/youramaryllis/brand-standards.json — do not invent.
+const field = '#36274C';
+const fieldHover = '#43305A';
+const page = '#E5DEEF';
+const card = '#FFFFFF';
+const text = '#2A242C';
+const muted = '#6F6860';
+const line = '#D9D3CC';
+const onHeader = '#FFFFFF';
+
+const wordmarkFont = '"Kaushan Script", cursive';
+const headingFont = '"Libre Baskerville", Georgia, serif';
+const bodyFont = '"Source Sans 3", system-ui, sans-serif';
+
 export const theme = createTheme({
   palette: {
     mode: 'light',
     primary: {
-      main: '#D2691E', // Warm orange
-      light: '#FF8C42',
-      dark: '#A0522D',
-      contrastText: '#fff',
+      main: field,
+      light: fieldHover,
+      dark: '#2A1D3C',
+      contrastText: onHeader,
     },
     secondary: {
-      main: '#8B4513', // Saddle brown
-      light: '#CD853F',
-      dark: '#654321',
-      contrastText: '#fff',
+      main: fieldHover,
+      contrastText: onHeader,
     },
     background: {
-      default: '#FFF8F0', // Warm cream
-      paper: '#FFFFFF',
+      default: page,
+      paper: card,
     },
     text: {
-      primary: '#2C1810', // Dark brown
-      secondary: '#5D4037', // Medium brown
+      primary: text,
+      secondary: muted,
     },
-    divider: '#E8D5C4', // Light warm gray
+    divider: line,
   },
   typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-    h1: {
-      fontWeight: 700,
-      color: '#2C1810',
-    },
-    h2: {
-      fontWeight: 600,
-      color: '#2C1810',
-    },
-    h3: {
-      fontWeight: 600,
-      color: '#2C1810',
-    },
-    h4: {
-      fontWeight: 600,
-      color: '#2C1810',
-    },
-    h5: {
-      fontWeight: 600,
-      color: '#2C1810',
-    },
-    h6: {
-      fontWeight: 600,
-      color: '#2C1810',
-    },
+    fontFamily: bodyFont,
+    h1: { fontFamily: headingFont, fontWeight: 700, color: field },
+    h2: { fontFamily: headingFont, fontWeight: 700, color: field },
+    h3: { fontFamily: headingFont, fontWeight: 700, color: field },
+    h4: { fontFamily: headingFont, fontWeight: 700, color: field },
+    h5: { fontFamily: headingFont, fontWeight: 700, color: field },
+    h6: { fontFamily: headingFont, fontWeight: 700, color: field },
+    button: { fontFamily: bodyFont, fontWeight: 600, textTransform: 'none' },
+    body1: { fontFamily: bodyFont },
+    body2: { fontFamily: bodyFont },
+    subtitle1: { fontFamily: bodyFont },
+    subtitle2: { fontFamily: bodyFont },
+    caption: { fontFamily: bodyFont },
+    overline: { fontFamily: bodyFont },
   },
   shape: {
     borderRadius: 12,
   },
   components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        body: {
+          backgroundColor: page,
+          color: text,
+          fontFamily: bodyFont,
+        },
+      },
+    },
     MuiAppBar: {
       styleOverrides: {
         root: {
-          background: 'linear-gradient(135deg, #D2691E 0%, #FF8C42 100%)',
-          boxShadow: '0 2px 20px rgba(210, 105, 30, 0.15)',
+          background: field,
+          backgroundImage: 'none',
+          color: onHeader,
+          boxShadow: '0 2px 16px rgba(54, 39, 76, 0.18)',
         },
       },
     },
     MuiCard: {
       styleOverrides: {
         root: {
-          background: '#FFFFFF',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
-          border: '1px solid #E8D5C4',
+          background: card,
+          boxShadow: '0 4px 20px rgba(54, 39, 76, 0.08)',
+          border: `1px solid ${line}`,
           transition: 'all 0.3s ease',
           '&:hover': {
-            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.12)',
+            boxShadow: '0 8px 30px rgba(54, 39, 76, 0.12)',
             transform: 'translateY(-2px)',
           },
         },
@@ -83,24 +96,26 @@ export const theme = createTheme({
         root: {
           borderRadius: 8,
           textTransform: 'none',
+          fontFamily: bodyFont,
           fontWeight: 600,
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+          boxShadow: 'none',
           '&:hover': {
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            boxShadow: '0 2px 8px rgba(54, 39, 76, 0.16)',
           },
         },
         contained: {
-          background: 'linear-gradient(135deg, #D2691E 0%, #FF8C42 100%)',
+          background: field,
+          color: onHeader,
           '&:hover': {
-            background: 'linear-gradient(135deg, #A0522D 0%, #D2691E 100%)',
+            background: fieldHover,
           },
         },
         outlined: {
-          borderColor: '#D2691E',
-          color: '#D2691E',
+          borderColor: field,
+          color: field,
           '&:hover': {
-            background: 'rgba(210, 105, 30, 0.08)',
-            borderColor: '#A0522D',
+            background: 'rgba(54, 39, 76, 0.08)',
+            borderColor: fieldHover,
           },
         },
       },
@@ -108,9 +123,9 @@ export const theme = createTheme({
     MuiPaper: {
       styleOverrides: {
         root: {
-          background: '#FFFFFF',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
-          border: '1px solid #E8D5C4',
+          background: card,
+          boxShadow: '0 4px 20px rgba(54, 39, 76, 0.08)',
+          border: `1px solid ${line}`,
         },
       },
     },
@@ -120,10 +135,10 @@ export const theme = createTheme({
           '& .MuiOutlinedInput-root': {
             borderRadius: 8,
             '&:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: '#D2691E',
+              borderColor: field,
             },
             '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: '#D2691E',
+              borderColor: field,
             },
           },
         },
@@ -134,8 +149,23 @@ export const theme = createTheme({
         root: {
           borderRadius: 16,
           fontWeight: 500,
+          fontFamily: bodyFont,
         },
       },
     },
   },
-}); 
+});
+
+export const brand = {
+  field,
+  fieldHover,
+  page,
+  card,
+  text,
+  muted,
+  line,
+  onHeader,
+  wordmarkFont,
+  headingFont,
+  bodyFont,
+};

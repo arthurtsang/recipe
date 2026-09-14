@@ -1,5 +1,5 @@
 {
-  "appTitle": "Metro Bistro",
+  "appTitle": "Secret Garden",
   "login": "登入",
   "logout": "登出",
   "recipes": "食譜",
@@ -66,11 +66,11 @@
   "profileLinkInvalid": "僅可使用英文字母、數字與連字號",
   "profileLinkSaveFailed": "設定個人連結失敗",
   "apiToken": "API 權杖",
-  "apiTokenHelp": "使用此權杖進行 API 驗證（例如 Bearer token）。請妥善保管。重新產生將使舊權杖失效。",
+  "apiTokenHelp": "使用此權杖進行 API 驗證（例如 Bearer token）。請善妥保管。重新產生將使舊權杖失效。",
   "showToken": "顯示權杖",
   "hideToken": "隱藏權杖",
   "copyToken": "複製",
   "copied": "已複製！",
   "refreshToken": "重新產生權杖",
   "close": "關閉"
-} 
+}
