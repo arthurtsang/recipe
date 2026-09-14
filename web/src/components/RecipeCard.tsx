@@ -70,15 +70,9 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
 
   const getDifficulty = () => {
     if (recipe.difficulty) {
-      const colorMap = {
-        'Easy': 'success' as const,
-        'Medium': 'warning' as const,
-        'Advanced': 'error' as const
-      };
-      return { level: recipe.difficulty, color: colorMap[recipe.difficulty as keyof typeof colorMap] || 'warning' };
+      return { level: recipe.difficulty, color: 'primary' as const };
     }
-    
-    return { level: 'Undetermined', color: 'default' as const };
+    return { level: 'Undetermined', color: 'primary' as const };
   };
 
   const ingredientCount = getIngredientCount();
@@ -142,7 +136,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
                   label={estimatedTime} 
                   size="small" 
                   variant="outlined"
-                  color={estimatedTime === 'Pending...' ? 'default' : 'secondary'}
+                  color="primary"
                 />
               </Tooltip>
             </Box>
