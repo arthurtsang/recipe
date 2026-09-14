@@ -22,7 +22,7 @@ import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import QueueIcon from '@mui/icons-material/Queue';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { useTranslation } from 'react-i18next';
-import { theme } from './theme';
+import { theme, brand } from './theme';
 import { RECIPE_APP_HOME_MY_REDIRECT_ONCE_KEY } from './constants/homeRouting';
 
 interface User {
@@ -115,7 +115,7 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <AppBar position="static" color="default" elevation={0} sx={{ mb: 4 }}>
+      <AppBar position="static" color="primary" elevation={0} sx={{ mb: 4 }}>
         <Container maxWidth="lg">
           <Toolbar disableGutters sx={{ px: 2 }}>
             <Box 
@@ -133,18 +133,27 @@ function App() {
               }}
             >
               <img 
-                src="/metro-bistro-icon.png" 
-                alt="Metro Bistro" 
+                src="/secret-garden-icon.png" 
+                alt="Secret Garden" 
                 style={{ 
                   height: '40px', 
                   width: '40px', 
                   marginRight: '12px',
-                  borderRadius: '4px'
+                  borderRadius: '6px'
                 }} 
               />
-              <Typography variant="h6">
-              {t('appTitle')}
-            </Typography>
+              <Typography
+                component="span"
+                sx={{
+                  fontFamily: brand.wordmarkFont,
+                  fontWeight: 400,
+                  fontSize: '1.45rem',
+                  color: brand.onHeader,
+                  lineHeight: 1.2,
+                }}
+              >
+                {t('appTitle')}
+              </Typography>
             </Box>
             {user ? (
               <>
@@ -250,7 +259,7 @@ function App() {
             bottom: 24,
             right: 24,
             zIndex: 1000,
-            boxShadow: '0 4px 20px rgba(210, 105, 30, 0.3)',
+            boxShadow: '0 4px 20px rgba(54, 39, 76, 0.28)',
           }}
         >
           <ChatIcon />
