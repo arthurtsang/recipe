@@ -147,7 +147,7 @@ function App() {
                 }}
                 aria-hidden
               >
-                <SecretGardenLogo variant="mark" size={22} />
+                <SecretGardenLogo variant="mark" size={36} />
               </Box>
               <Typography
                 component="span"
