@@ -1,81 +1,11 @@
-/** Secret Garden identity — same pattern as Sageboard SageLogo.
+/** Shared Secret Garden silhouette — official leaf + stone table, 900-unit path. */
+export const SECRET_GARDEN_MARK_PATH =
+  "M493.0 163.0L525.0 165.0L562.0 187.0L577.0 191.0L597.0 191.0L614.0 195.0L629.0 207.0L650.0 241.0L692.0 274.0L700.0 290.0L705.0 324.0L730.0 357.0L736.0 371.0L741.0 421.0L759.0 472.0L761.0 492.0L736.0 478.0L712.0 471.0L695.0 471.0L694.0 473.0L664.0 479.0L650.0 479.0L626.0 473.0L608.0 473.0L581.0 482.0L563.0 483.0L553.0 481.0L539.0 474.0L510.0 449.0L499.0 446.0L476.0 445.0L457.0 437.0L442.0 423.0L419.0 390.0L410.0 381.0L394.0 371.0L376.0 365.0L352.0 365.0L327.0 372.0L296.0 388.0L273.0 405.0L260.0 418.0L249.0 435.0L235.0 464.0L224.0 504.0L222.0 525.0L223.0 562.0L225.0 563.0L224.0 569.0L229.0 592.0L232.0 587.0L237.0 556.0L250.0 527.0L266.0 508.0L278.0 500.0L260.0 543.0L237.0 617.0L234.0 653.0L236.0 698.0L206.0 698.0L203.0 665.0L189.0 626.0L172.0 588.0L152.0 552.0L142.0 539.0L153.0 543.0L171.0 556.0L191.0 578.0L201.0 598.0L205.0 599.0L198.0 558.0L197.0 521.0L200.0 496.0L202.0 495.0L205.0 477.0L213.0 454.0L236.0 409.0L284.0 346.0L306.0 313.0L320.0 285.0L326.0 262.0L339.0 235.0L361.0 209.0L396.0 188.0L447.0 179.0L476.0 169.0L479.0 166.0L492.0 164.0L493.0 163.0Z M526.0 212.0L488.0 234.0L405.0 304.0L360.0 327.0L374.0 308.0L402.0 254.0L416.0 220.0L413.0 218.0L398.0 235.0L359.0 297.0L338.0 325.0L295.0 370.0L298.0 371.0L336.0 351.0L367.0 341.0L387.0 338.0L417.0 338.0L441.0 342.0L479.0 358.0L500.0 372.0L538.0 406.0L576.0 445.0L577.0 442.0L569.0 427.0L544.0 393.0L514.0 363.0L485.0 343.0L532.0 350.0L583.0 365.0L624.0 384.0L656.0 402.0L717.0 444.0L718.0 442.0L709.0 431.0L670.0 395.0L639.0 374.0L595.0 352.0L554.0 338.0L517.0 330.0L486.0 327.0L449.0 327.0L529.0 306.0L559.0 301.0L560.0 299.0L640.0 287.0L639.0 283.0L579.0 281.0L553.0 284.0L509.0 293.0L417.0 318.0L447.0 294.0L477.0 265.0L524.0 219.0L529.0 213.0L527.0 211.0L526.0 212.0Z M440.0 564.0L520.0 565.0L571.0 571.0L604.0 580.0L610.0 585.0L610.0 592.0L601.0 599.0L587.0 603.0L510.0 616.0L457.0 618.0L405.0 614.0L404.0 612.0L359.0 606.0L334.0 599.0L325.0 593.0L325.0 585.0L331.0 580.0L352.0 575.0L353.0 573.0L400.0 568.0L402.0 566.0L439.0 565.0L440.0 564.0Z M326.0 622.0L370.0 625.0L395.0 636.0L406.0 647.0L420.0 669.0L426.0 682.0L428.0 696.0L426.0 698.0L287.0 699.0L280.0 689.0L281.0 674.0L285.0 662.0L295.0 643.0L305.0 632.0L317.0 624.0L325.0 623.0L326.0 622.0Z M590.0 619.0L617.0 622.0L634.0 636.0L641.0 650.0L644.0 664.0L644.0 681.0L640.0 693.0L635.0 698.0L630.0 699.0L508.0 698.0L506.0 696.0L508.0 683.0L517.0 665.0L539.0 636.0L561.0 624.0L589.0 620.0L590.0 619.0Z";
+
+/** Secret Garden identity — same component pattern as Sageboard SageLogo.
  * `badge` = dusk tile + white leaf/table.
  * `mark` = glyph only, tinted with currentColor (header lockup).
  */
-function MarkGlyph({ fill }: { fill: string }) {
-  return (
-    <g fill={fill}>
-      <rect x="17" y="2" width="3" height="1" />
-      <rect x="13" y="3" width="9" height="1" />
-      <rect x="11" y="4" width="14" height="1" />
-      <rect x="10" y="5" width="16" height="1" />
-      <rect x="10" y="6" width="7" height="1" />
-      <rect x="18" y="6" width="9" height="1" />
-      <rect x="9" y="7" width="3" height="1" />
-      <rect x="13" y="7" width="3" height="1" />
-      <rect x="17" y="7" width="11" height="1" />
-      <rect x="9" y="8" width="3" height="1" />
-      <rect x="13" y="8" width="2" height="1" />
-      <rect x="16" y="8" width="5" height="1" />
-      <rect x="23" y="8" width="6" height="1" />
-      <rect x="9" y="9" width="2" height="1" />
-      <rect x="12" y="9" width="1" height="1" />
-      <rect x="15" y="9" width="2" height="1" />
-      <rect x="20" y="9" width="9" height="1" />
-      <rect x="8" y="10" width="2" height="1" />
-      <rect x="18" y="10" width="11" height="1" />
-      <rect x="7" y="11" width="2" height="1" />
-      <rect x="11" y="11" width="5" height="1" />
-      <rect x="22" y="11" width="8" height="1" />
-      <rect x="7" y="12" width="11" height="1" />
-      <rect x="19" y="12" width="4" height="1" />
-      <rect x="24" y="12" width="7" height="1" />
-      <rect x="6" y="13" width="2" height="1" />
-      <rect x="14" y="13" width="5" height="1" />
-      <rect x="20" y="13" width="5" height="1" />
-      <rect x="26" y="13" width="5" height="1" />
-      <rect x="5" y="14" width="2" height="1" />
-      <rect x="15" y="14" width="5" height="1" />
-      <rect x="21" y="14" width="6" height="1" />
-      <rect x="28" y="14" width="3" height="1" />
-      <rect x="5" y="15" width="1" height="1" />
-      <rect x="15" y="15" width="16" height="1" />
-      <rect x="4" y="16" width="1" height="1" />
-      <rect x="17" y="16" width="14" height="1" />
-      <rect x="4" y="17" width="1" height="1" />
-      <rect x="20" y="17" width="12" height="1" />
-      <rect x="3" y="18" width="2" height="1" />
-      <rect x="21" y="18" width="2" height="1" />
-      <rect x="31" y="18" width="1" height="1" />
-      <rect x="3" y="19" width="1" height="1" />
-      <rect x="3" y="20" width="1" height="1" />
-      <rect x="3" y="21" width="1" height="1" />
-      <rect x="5" y="21" width="1" height="1" />
-      <rect x="1" y="22" width="1" height="1" />
-      <rect x="3" y="22" width="1" height="1" />
-      <rect x="5" y="22" width="1" height="1" />
-      <rect x="1" y="23" width="5" height="1" />
-      <rect x="10" y="23" width="13" height="1" />
-      <rect x="2" y="24" width="3" height="1" />
-      <rect x="10" y="24" width="14" height="1" />
-      <rect x="2" y="25" width="3" height="1" />
-      <rect x="14" y="25" width="5" height="1" />
-      <rect x="3" y="26" width="2" height="1" />
-      <rect x="8" y="26" width="5" height="1" />
-      <rect x="21" y="26" width="4" height="1" />
-      <rect x="3" y="27" width="2" height="1" />
-      <rect x="8" y="27" width="6" height="1" />
-      <rect x="20" y="27" width="6" height="1" />
-      <rect x="3" y="28" width="2" height="1" />
-      <rect x="7" y="28" width="7" height="1" />
-      <rect x="19" y="28" width="7" height="1" />
-      <rect x="3" y="29" width="2" height="1" />
-      <rect x="7" y="29" width="8" height="1" />
-      <rect x="19" y="29" width="7" height="1" />
-    </g>
-  );
-}
-
 export function SecretGardenLogo({
   size = 32,
   variant = 'badge',
@@ -84,10 +14,11 @@ export function SecretGardenLogo({
   variant?: 'badge' | 'mark';
 }) {
   const mark = variant === 'mark';
+  const glyphFill = mark ? 'currentColor' : '#FFFFFF';
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 32 32"
+      viewBox="0 0 900 900"
       width={size}
       height={size}
       aria-hidden
@@ -95,10 +26,10 @@ export function SecretGardenLogo({
       style={{ display: 'block', flexShrink: 0 }}
     >
       {mark ? null : (
-        <rect x="0" y="0" width="32" height="32" rx="5" ry="5" fill="#36274C" />
+        <rect x="0" y="0" width="900" height="900" rx="140" ry="140" fill="#36274C" />
       )}
-      <g transform={mark ? undefined : 'translate(16,16) scale(0.78) translate(-16,-16)'}>
-        <MarkGlyph fill={mark ? 'currentColor' : '#FFFFFF'} />
+      <g transform="translate(450,450) scale(0.92) translate(-450,-450)">
+        <path fill={glyphFill} fillRule="evenodd" stroke="none" d={SECRET_GARDEN_MARK_PATH} />
       </g>
     </svg>
   );
