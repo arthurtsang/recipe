@@ -3,7 +3,7 @@ import { expect } from '@playwright/test';
 import type { RecipeWorld } from '../support/world';
 
 When('I click the app logo or title', async function (this: RecipeWorld) {
-  await this.page!.getByRole('link', { name: /metro bistro|recipes/i }).first().click();
+  await this.page!.getByRole('link', { name: /secret garden|metro bistro|recipes/i }).first().click();
   await this.page!.waitForLoadState('networkidle');
 });
 

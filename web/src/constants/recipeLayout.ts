@@ -1,6 +1,6 @@
 export type RecipeLayout = 'tile' | 'list';
 
-export const RECIPE_LAYOUT_STORAGE_KEY = 'metro-bistro:recipe-layout';
+export const RECIPE_LAYOUT_STORAGE_KEY = 'secret-garden:recipe-layout';
 
 export function readRecipeLayout(): RecipeLayout {
   try {
