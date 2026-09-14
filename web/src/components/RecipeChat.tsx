@@ -142,7 +142,7 @@ const RecipeChat: React.FC<RecipeChatProps> = ({ open, onClose }) => {
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'space-between',
-        background: 'linear-gradient(135deg, #D2691E 0%, #FF8C42 100%)',
+        background: '#36274C',
         color: 'white',
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -163,7 +163,7 @@ const RecipeChat: React.FC<RecipeChatProps> = ({ open, onClose }) => {
           display: 'flex', 
           flexDirection: 'column', 
           gap: 2,
-          background: '#FFF8F0',
+          background: '#E5DEEF',
         }}>
           {messages.map((message) => (
             <Box
@@ -185,7 +185,7 @@ const RecipeChat: React.FC<RecipeChatProps> = ({ open, onClose }) => {
                   p: 2,
                   maxWidth: '70%',
                   background: message.sender === 'user' 
-                    ? 'linear-gradient(135deg, #D2691E 0%, #FF8C42 100%)'
+                    ? '#36274C'
                     : 'white',
                   color: message.sender === 'user' ? 'white' : 'inherit',
                   boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
@@ -207,10 +207,10 @@ const RecipeChat: React.FC<RecipeChatProps> = ({ open, onClose }) => {
                           label={recipe.title}
                           size="small"
                           sx={{
-                            background: 'rgba(210, 105, 30, 0.1)',
-                            color: '#D2691E',
+                            background: 'rgba(54, 39, 76, 0.1)',
+                            color: '#36274C',
                             '&:hover': {
-                              background: 'rgba(210, 105, 30, 0.2)',
+                              background: 'rgba(54, 39, 76, 0.2)',
                             },
                           }}
                         />
@@ -273,7 +273,7 @@ const RecipeChat: React.FC<RecipeChatProps> = ({ open, onClose }) => {
                   sx={{
                     cursor: 'pointer',
                     '&:hover': {
-                      background: 'rgba(210, 105, 30, 0.1)',
+                      background: 'rgba(54, 39, 76, 0.1)',
                     },
                   }}
                 />
@@ -321,4 +321,4 @@ const RecipeChat: React.FC<RecipeChatProps> = ({ open, onClose }) => {
   );
 };
 
-export default RecipeChat; 
+export default RecipeChat;
