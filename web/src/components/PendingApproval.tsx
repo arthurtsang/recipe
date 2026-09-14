@@ -51,7 +51,7 @@ export default function PendingApproval({ userEmail }: PendingApprovalProps) {
             Your account ({userEmail}) is waiting for administrator approval.
           </Typography>
           <Typography variant="body2">
-            Please contact the administrator to enable your access to Metro Bistro.
+            Please contact the administrator to enable your access to Secret Garden.
           </Typography>
         </Alert>
 
@@ -75,4 +75,4 @@ export default function PendingApproval({ userEmail }: PendingApprovalProps) {
       </Paper>
     </Box>
   );
-} 
+}
