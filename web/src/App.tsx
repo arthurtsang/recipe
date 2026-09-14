@@ -133,7 +133,7 @@ function App() {
               }}
             >
               <img 
-                src="/secret-garden-icon.png" 
+                src="/secret-garden-icon.svg" 
                 alt="Secret Garden" 
                 style={{ 
                   height: '40px', 
