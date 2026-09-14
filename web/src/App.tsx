@@ -11,6 +11,7 @@ import AdminUserApproval from './components/AdminUserApproval';
 import AdminQueueStatus from './components/AdminQueueStatus';
 import PendingApproval from './components/PendingApproval';
 import SettingsDialog from './components/SettingsDialog';
+import { SecretGardenLogo } from './components/SecretGardenLogo';
 import { RecipeLayoutProvider } from './context/RecipeLayoutContext';
 import { Container, CssBaseline, AppBar, Toolbar, Typography, Button, Avatar, Menu, MenuItem, IconButton, ListItemIcon, Box, ThemeProvider, Fab } from '@mui/material';
 import PersonIcon from '@mui/icons-material/Person';
@@ -133,18 +134,21 @@ function App() {
               }}
             >
               <Box
-                component="img"
-                src="/secret-garden-icon.svg"
-                alt="Secret Garden"
                 sx={{
-                  height: 40,
-                  width: 40,
+                  width: 38,
+                  height: 38,
                   mr: 1.5,
-                  display: 'block',
                   flexShrink: 0,
-                  objectFit: 'contain',
+                  display: 'grid',
+                  placeItems: 'center',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(255,255,255,0.35)',
+                  color: brand.onHeader,
                 }}
-              />
+                aria-hidden
+              >
+                <SecretGardenLogo variant="mark" size={22} />
+              </Box>
               <Typography
                 component="span"
                 sx={{
