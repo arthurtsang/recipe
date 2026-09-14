@@ -23,6 +23,7 @@ import QueueIcon from '@mui/icons-material/Queue';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { useTranslation } from 'react-i18next';
 import { theme, brand } from './theme';
+import { secretGardenIconSrc } from './assets/secretGardenIcon';
 import { RECIPE_APP_HOME_MY_REDIRECT_ONCE_KEY } from './constants/homeRouting';
 
 interface User {
@@ -132,15 +133,17 @@ function App() {
                 }
               }}
             >
-              <img 
-                src="/secret-garden-icon.svg" 
-                alt="Secret Garden" 
-                style={{ 
-                  height: '40px', 
-                  width: '40px', 
+              <img
+                src={secretGardenIconSrc}
+                alt="Secret Garden"
+                style={{
+                  height: '40px',
+                  width: '40px',
                   marginRight: '12px',
-                  borderRadius: '6px'
-                }} 
+                  display: 'block',
+                  objectFit: 'contain',
+                  flexShrink: 0,
+                }}
               />
               <Typography
                 component="span"
