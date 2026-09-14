@@ -40,15 +40,10 @@ function formatEstimatedTime(estimatedTime?: string): string {
 }
 
 function difficultyMeta(difficulty?: string) {
-  if (!difficulty) return { level: 'Undetermined', color: 'default' as const };
-  const colorMap = {
-    Easy: 'success' as const,
-    Medium: 'warning' as const,
-    Advanced: 'error' as const,
-  };
+  if (!difficulty) return { level: 'Undetermined', color: 'primary' as const };
   return {
     level: difficulty,
-    color: colorMap[difficulty as keyof typeof colorMap] || ('warning' as const),
+    color: 'primary' as const,
   };
 }
 
@@ -130,6 +125,7 @@ const RecipeListItem: React.FC<RecipeListItemProps> = ({ recipe, showAuthor = tr
               label={estimatedTime}
               size="small"
               variant="outlined"
+              color="primary"
               sx={{ height: 24 }}
             />
           </Tooltip>
