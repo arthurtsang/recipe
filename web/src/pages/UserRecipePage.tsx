@@ -144,7 +144,7 @@ export default function UserRecipePage({
     <Box
       sx={{
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #FFF8F0 0%, #F5F5DC 100%)',
+        background: 'background.default',
         py: 4,
       }}
     >
