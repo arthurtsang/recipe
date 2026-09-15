@@ -5,14 +5,13 @@ import { resolve } from 'node:path'
 import {
   APPLE_TOUCH_PNG_180_B64,
   FAVICON_ICO_B64,
-  FAVICON_PNG_16_B64,
   FAVICON_PNG_32_B64,
 } from './favicon-assets'
 
 function secretGardenFavicons(): Plugin {
   const files: { fileName: string; b64: string }[] = [
     { fileName: 'favicon.ico', b64: FAVICON_ICO_B64 },
-    { fileName: 'favicon-16x16.png', b64: FAVICON_PNG_16_B64 },
+    { fileName: 'favicon-16x16.png', b64: FAVICON_PNG_32_B64 },
     { fileName: 'favicon-32x32.png', b64: FAVICON_PNG_32_B64 },
     { fileName: 'apple-touch-icon.png', b64: APPLE_TOUCH_PNG_180_B64 },
   ]
