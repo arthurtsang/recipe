@@ -1,7 +1,7 @@
 {
-  "name": "metro-bistro-backend",
+  "name": "secret-garden-backend",
   "version": "1.0.0",
-  "description": "Metro Bistro Recipe Management Backend",
+  "description": "Secret Garden Recipe Management Backend",
   "main": "index.js",
   "scripts": {
     "postinstall": "prisma generate",
