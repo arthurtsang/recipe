@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Metro Bistro Backend — template .env (database is usually Supabase or other hosted Postgres).
+# Secret Garden Backend — template .env (database is usually Supabase or other hosted Postgres).
 
-echo "Setting up Metro Bistro Backend environment template..."
+echo "Setting up Secret Garden Backend environment template..."
 
 cat > .env << 'EOF'
 # Database — Supabase on Vercel needs the pooler, not the direct db.*.supabase.co host.
@@ -28,7 +28,7 @@ GOOGLE_CLIENT_ID="your_google_client_id_here"
 GOOGLE_CLIENT_SECRET="your_google_client_secret_here"
 
 # Session Configuration
-SESSION_SECRET="metro-bistro-session-secret-change-this-in-production"
+SESSION_SECRET="secret-garden-session-secret-change-this-in-production"
 
 # Admin email (auto-enabled on first login)
 ADMIN_EMAIL=""
