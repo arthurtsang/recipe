@@ -52,6 +52,10 @@ function App() {
   const { t } = useTranslation();
 
   useEffect(() => {
+    document.title = 'Secret Garden - Recipe Management';
+  }, []);
+
+  useEffect(() => {
     // Only block UI on the first auth resolve; later navigations refresh quietly.
     let cancelled = false;
     fetch('/api/me', { credentials: 'include' })
