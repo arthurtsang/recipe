@@ -13,6 +13,8 @@ function secretGardenFavicons(): Plugin {
     { fileName: 'favicon.ico', b64: FAVICON_ICO_B64 },
     { fileName: 'favicon-32x32.png', b64: FAVICON_PNG_32_B64 },
     { fileName: 'apple-touch-icon.png', b64: APPLE_TOUCH_PNG_180_B64 },
+    // DDG cached this old public path; keep the URL, serve the official mark.
+    { fileName: 'metro-bistro-icon.png', b64: APPLE_TOUCH_PNG_180_B64 },
   ]
   return {
     name: 'secret-garden-favicons',
