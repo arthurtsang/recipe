@@ -12,6 +12,7 @@ router.get('/:id', recipeController.getRecipeById);
 router.post('/', requiresEnabledUser(), recipeController.createRecipe);
 router.post('/upload', requiresEnabledUser(), uploadImage, uploadImageHandler);
 router.put('/:id', requiresEnabledUser(), recipeController.updateRecipe);
+router.post('/:id/validate', requiresEnabledUser(), recipeController.validateRecipe);
 router.delete('/:id', requiresEnabledUser(), recipeController.deleteRecipe);
 router.delete('/:id/versions/:versionId', requiresEnabledUser(), recipeController.deleteRecipeVersion);
 router.get('/:id/ratings', recipeController.getRecipeRatings);
@@ -34,4 +35,4 @@ router.post('/test-analysis', requiresEnabledUser(), async (req, res) => {
   }
 });
 
-export default router; 
+export default router;
