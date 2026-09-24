@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import * as recipeController from '../controllers/recipeController';
 import { uploadImage, uploadImageHandler } from '../controllers/recipeController';
+import { validateRecipe } from '../controllers/validateRecipe';
 import { requiresEnabledUser } from '../middleware/auth';
 
 const router = Router();
@@ -12,7 +13,7 @@ router.get('/:id', recipeController.getRecipeById);
 router.post('/', requiresEnabledUser(), recipeController.createRecipe);
 router.post('/upload', requiresEnabledUser(), uploadImage, uploadImageHandler);
 router.put('/:id', requiresEnabledUser(), recipeController.updateRecipe);
-router.post('/:id/validate', requiresEnabledUser(), recipeController.validateRecipe);
+router.post('/:id/validate', requiresEnabledUser(), validateRecipe);
 router.delete('/:id', requiresEnabledUser(), recipeController.deleteRecipe);
 router.delete('/:id/versions/:versionId', requiresEnabledUser(), recipeController.deleteRecipeVersion);
 router.get('/:id/ratings', recipeController.getRecipeRatings);
