@@ -23,33 +23,24 @@ type RecipeListItemProps = {
     difficulty?: string;
     timeReasoning?: string;
     difficultyReasoning?: string;
+    versions?: Array<{ ingredients: string; instructions: string }>;
   };
   showAuthor?: boolean;
 };
 
-function formatEstimatedTime(estimatedTime?: string): string {
-  if (!estimatedTime) return 'Pending...';
-  const minutes = parseInt(estimatedTime, 10);
-  if (Number.isNaN(minutes)) return estimatedTime;
-  if (minutes >= 60) {
-    const hours = Math.floor(minutes / 60);
-    const remainingMins = minutes % 60;
-    return remainingMins === 0 ? `${hours}h` : `${hours}h ${remainingMins}m`;
-  }
-  return `${minutes}m`;
-}
-
-function difficultyMeta(difficulty?: string) {
-  if (!difficulty) return { level: 'Undetermined', color: 'primary' as const };
-  return {
-    level: difficulty,
-    color: 'primary' as const,
-  };
+function formatEstimatedTime(estimatedTime?: string): string | null {
+  if (!estimatedTime || !String(estimatedTime).trim()) return null;
+  const minutes = parseInt(String(estimatedTime), 10);
+  if (Number.isNaN(minutes) || minutes <= 0) return null;
+  const hours = Math.floor(minutes / 60);
+  const remainingMins = minutes % 60;
+  if (hours > 0 && remainingMins === 0) return `${hours}h 0m`;
+  if (hours > 0) return `${hours}h ${remainingMins}m`;
+  return `0h ${minutes}m`;
 }
 
 const RecipeListItem: React.FC<RecipeListItemProps> = ({ recipe, showAuthor = true }) => {
   const estimatedTime = formatEstimatedTime(recipe.estimatedTime);
-  const difficulty = difficultyMeta(recipe.difficulty);
   const imageSrc = recipe.imageUrl ? recipeImageSrc(recipe.imageUrl) : undefined;
 
   return (
@@ -76,39 +67,14 @@ const RecipeListItem: React.FC<RecipeListItemProps> = ({ recipe, showAuthor = tr
       }}
     >
       {imageSrc ? (
-        <Box
-          component="img"
-          src={imageSrc}
-          alt=""
-          sx={{
-            width: 56,
-            height: 56,
-            borderRadius: 1.5,
-            objectFit: 'cover',
-            flexShrink: 0,
-          }}
-        />
+        <Box component="img" src={imageSrc} alt="" sx={{ width: 56, height: 56, borderRadius: 1.5, objectFit: 'cover', flexShrink: 0 }} />
       ) : (
-        <Box
-          sx={{
-            width: 56,
-            height: 56,
-            borderRadius: 1.5,
-            bgcolor: 'grey.100',
-            flexShrink: 0,
-          }}
-        />
+        <Box sx={{ width: 56, height: 56, borderRadius: 1.5, bgcolor: 'grey.100', flexShrink: 0 }} />
       )}
-
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography
-          variant="subtitle1"
-          sx={{ fontWeight: 600, lineHeight: 1.3, mb: 0.25 }}
-          noWrap
-        >
+        <Typography variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.3, mb: 0.25 }} noWrap>
           {recipe.title}
         </Typography>
-
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
           {typeof recipe.averageRating === 'number' && (
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -118,22 +84,11 @@ const RecipeListItem: React.FC<RecipeListItemProps> = ({ recipe, showAuthor = tr
               </Typography>
             </Box>
           )}
-
-          <Tooltip title={recipe.timeReasoning || ''} placement="top" arrow>
-            <Chip
-              icon={<AccessTime sx={{ fontSize: 14 }} />}
-              label={estimatedTime}
-              size="small"
-              variant="outlined"
-              color="primary"
-              sx={{ height: 24 }}
-            />
-          </Tooltip>
-
-          <Tooltip title={recipe.difficultyReasoning || ''} placement="top" arrow>
-            <Chip label={difficulty.level} size="small" color={difficulty.color} sx={{ height: 24 }} />
-          </Tooltip>
-
+          {estimatedTime && (
+            <Tooltip title={recipe.timeReasoning || ''} placement="top" arrow>
+              <Chip icon={<AccessTime sx={{ fontSize: 14 }} />} label={estimatedTime} size="small" variant="outlined" color="primary" sx={{ height: 24 }} />
+            </Tooltip>
+          )}
           {showAuthor && recipe.user && (
             <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
               <Person sx={{ fontSize: 14, mr: 0.25, color: 'text.secondary' }} />
@@ -142,28 +97,17 @@ const RecipeListItem: React.FC<RecipeListItemProps> = ({ recipe, showAuthor = tr
                 const name = u.displayName ?? ((u.alias && u.alias.trim()) || u.name || u.email);
                 const linkAlias = (u.alias && u.alias.trim()) || null;
                 return linkAlias ? (
-                  <Typography
-                    component={Link}
-                    to={`/users/${linkAlias}`}
-                    variant="caption"
-                    color="text.secondary"
-                    noWrap
-                    onClick={(e) => e.stopPropagation()}
-                    sx={{ '&:hover': { textDecoration: 'underline' } }}
-                  >
+                  <Typography component={Link} to={`/users/${linkAlias}`} variant="caption" color="text.secondary" noWrap onClick={(e) => e.stopPropagation()} sx={{ '&:hover': { textDecoration: 'underline' } }}>
                     {name}
                   </Typography>
                 ) : (
-                  <Typography variant="caption" color="text.secondary" noWrap>
-                    {name}
-                  </Typography>
+                  <Typography variant="caption" color="text.secondary" noWrap>{name}</Typography>
                 );
               })()}
             </Box>
           )}
         </Box>
       </Box>
-
       <ChevronRight sx={{ color: 'text.disabled', flexShrink: 0 }} />
     </Paper>
   );
