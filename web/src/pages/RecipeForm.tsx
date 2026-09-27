@@ -40,13 +40,9 @@ const RecipeForm: React.FC<{ user: User | null }> = ({ user }) => {
           setDescription(data.description || '');
           setIngredients(data.versions?.[0]?.ingredients || '');
           setInstructions(data.versions?.[0]?.instructions || '');
-          // Use recipe imageUrl, or fallback to version imageUrl
           const imgUrl = data.imageUrl || data.versions?.[0]?.imageUrl || '';
           setImageUrl(imgUrl);
-          // Set imagePreview to show the existing image
-          if (imgUrl) {
-            setImagePreview(null); // Clear any previous preview
-          }
+          if (imgUrl) setImagePreview(null);
         })
         .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
         .finally(() => setLoading(false));
@@ -79,6 +75,14 @@ const RecipeForm: React.FC<{ user: User | null }> = ({ user }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!title.trim()) {
+      setError('Recipe name is required');
+      return;
+    }
+    if (!ingredients.trim() && !instructions.trim()) {
+      setError('Add ingredients or instructions');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -87,10 +91,17 @@ const RecipeForm: React.FC<{ user: User | null }> = ({ user }) => {
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, ingredients, instructions, imageUrl }),
+        body: JSON.stringify({ title: title.trim(), description, ingredients, instructions, imageUrl }),
         credentials: 'include',
       });
-      if (!res.ok) throw new Error('Failed to save recipe');
+      if (!res.ok) {
+        let msg = 'Failed to save recipe';
+        try {
+          const data = await res.json();
+          msg = data.error || msg;
+        } catch { /* ignore */ }
+        throw new Error(msg);
+      }
       const data = await res.json();
       navigate(`/recipes/${isEdit ? id : data.id}`);
     } catch (err: unknown) {
@@ -112,40 +123,12 @@ const RecipeForm: React.FC<{ user: User | null }> = ({ user }) => {
     <Paper sx={{ p: 4, maxWidth: 600, mx: 'auto', width: '100%' }}>
       <Typography variant="h5" gutterBottom sx={{ textAlign: 'center', mb: 2 }}>{isEdit ? t('editRecipe') : t('addRecipe')}</Typography>
       <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <TextField
-          label="Title"
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          required
-        />
-        <TextField
-          label="Description"
-          value={description}
-          onChange={e => setDescription(e.target.value)}
-          multiline
-        />
-        <TextField
-          label="Ingredients"
-          value={ingredients}
-          onChange={e => setIngredients(e.target.value)}
-          multiline
-          minRows={4}
-          required
-          helperText="Markdown supported (**, -, 1. …). Single newlines = line breaks."
-        />
-        <TextField
-          label="Instructions"
-          value={instructions}
-          onChange={e => setInstructions(e.target.value)}
-          multiline
-          minRows={6}
-          required
-          helperText="Markdown supported (**, ##, 1. …). Single newlines = line breaks."
-        />
+        <TextField label="Title" value={title} onChange={e => setTitle(e.target.value)} required />
+        <TextField label="Description" value={description} onChange={e => setDescription(e.target.value)} multiline />
+        <TextField label="Ingredients" value={ingredients} onChange={e => setIngredients(e.target.value)} multiline minRows={4} helperText="Optional if instructions are provided. Markdown supported." />
+        <TextField label="Instructions" value={instructions} onChange={e => setInstructions(e.target.value)} multiline minRows={6} helperText="Optional if ingredients are provided. Markdown supported." />
         <Box>
-          <Typography variant="subtitle2" gutterBottom>
-            Image (Upload file or enter URL)
-          </Typography>
+          <Typography variant="subtitle2" gutterBottom>Image (Upload file or enter URL)</Typography>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 1 }}>
             <Button variant="outlined" component="label">
               Upload Image File
@@ -153,32 +136,15 @@ const RecipeForm: React.FC<{ user: User | null }> = ({ user }) => {
             </Button>
             <Typography variant="body2" color="text.secondary">or</Typography>
           </Box>
-          <TextField
-            fullWidth
-            label="Image URL"
-            value={imageUrl}
-            onChange={e => setImageUrl(e.target.value)}
-            placeholder="https://example.com/image.jpg"
-            helperText="Enter a direct link to an image"
-          />
+          <TextField fullWidth label="Image URL" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="https://example.com/image.jpg" helperText="Enter a direct link to an image" />
           {uploading && <Typography sx={{ mt: 1 }} component="span">Uploading...</Typography>}
           {(imagePreview || imageUrl) && (
             <Box mt={2}>
-              <img 
-                src={
-                  imagePreview
-                    ? imagePreview
-                    : recipeImageSrc(
-                        imageUrl?.includes('localhost:8081')
-                          ? imageUrl.replace(/https?:\/\/localhost:8081/, window.location.origin)
-                          : imageUrl
-                      )
-                }
-                alt="Preview" 
-                style={{ maxWidth: 200, maxHeight: 200, objectFit: 'contain', display: 'block' }} 
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                }}
+              <img
+                src={imagePreview ? imagePreview : recipeImageSrc(imageUrl?.includes('localhost:8081') ? imageUrl.replace(/https?:\/\/localhost:8081/, window.location.origin) : imageUrl)}
+                alt="Preview"
+                style={{ maxWidth: 200, maxHeight: 200, objectFit: 'contain', display: 'block' }}
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
             </Box>
           )}
