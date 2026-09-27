@@ -14,10 +14,6 @@ interface HomeEntryProps {
   user: User | null;
 }
 
-/**
- * Authenticated `/` redirects once per tab session to My recipes (right after OAuth or first open).
- * Once that landing is acknowledged, `/` shows the community list again (logo / Browse all recipes).
- */
 export default function HomeEntry({ authResolved, user }: HomeEntryProps) {
   const navigate = useNavigate();
   const alias = user?.alias?.trim() ?? '';
@@ -59,5 +55,5 @@ export default function HomeEntry({ authResolved, user }: HomeEntryProps) {
     );
   }
 
-  return <RecipeList />;
+  return <RecipeList userId={user?.id ?? null} />;
 }
