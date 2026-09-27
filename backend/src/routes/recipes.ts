@@ -6,13 +6,31 @@ import { requiresEnabledUser } from '../middleware/auth';
 
 const router = Router();
 
+function requireRecipeContent(req: Request, res: Response, next: NextFunction) {
+  const { title, ingredients, instructions } = req.body || {};
+  const isCreate = req.method === 'POST';
+  if (isCreate || title !== undefined) {
+    if (typeof title !== 'string' || !title.trim()) {
+      return res.status(400).json({ error: 'Recipe name is required' });
+    }
+  }
+  if (isCreate || ingredients !== undefined || instructions !== undefined) {
+    const hasIngredients = typeof ingredients === 'string' && ingredients.trim().length > 0;
+    const hasInstructions = typeof instructions === 'string' && instructions.trim().length > 0;
+    if (!hasIngredients && !hasInstructions) {
+      return res.status(400).json({ error: 'Add ingredients or instructions' });
+    }
+  }
+  next();
+}
+
 router.get('/', recipeController.getAllRecipes);
 router.get('/media', recipeController.serveRecipeMedia);
 router.get('/proxy-image', recipeController.proxyImage);
 router.get('/:id', recipeController.getRecipeById);
-router.post('/', requiresEnabledUser(), recipeController.createRecipe);
+router.post('/', requiresEnabledUser(), requireRecipeContent, recipeController.createRecipe);
 router.post('/upload', requiresEnabledUser(), uploadImage, uploadImageHandler);
-router.put('/:id', requiresEnabledUser(), recipeController.updateRecipe);
+router.put('/:id', requiresEnabledUser(), requireRecipeContent, recipeController.updateRecipe);
 router.post('/:id/validate', requiresEnabledUser(), validateRecipe);
 router.delete('/:id', requiresEnabledUser(), recipeController.deleteRecipe);
 router.delete('/:id/versions/:versionId', requiresEnabledUser(), recipeController.deleteRecipeVersion);
