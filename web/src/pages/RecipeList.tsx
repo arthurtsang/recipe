@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import RecipeCard from '../components/RecipeCard';
 import RecipeListItem from '../components/RecipeListItem';
-import { Typography, Box, TextField, Button, Container, CircularProgress } from '@mui/material';
+import { Typography, Box, TextField, Button, Container, CircularProgress, Chip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useRecipeLayout } from '../context/RecipeLayoutContext';
 import { brand } from '../theme';
+import { useSearchParams } from 'react-router-dom';
+import { loadRecentSearches, rememberSearch } from '../utils/recentSearches';
 
-// Define a Recipe type for better type safety
 interface Recipe {
   id: string;
   title: string;
@@ -18,20 +19,23 @@ interface Recipe {
   difficulty?: string;
   timeReasoning?: string;
   difficultyReasoning?: string;
-  versions?: Array<{
-    ingredients: string;
-    instructions: string;
-  }>;
+  versions?: Array<{ ingredients: string; instructions: string }>;
 }
 
-export default function RecipeList() {
+interface RecipeListProps {
+  userId?: string | null;
+}
+
+export default function RecipeList({ userId = null }: RecipeListProps) {
   const { t } = useTranslation();
   const { layout } = useRecipeLayout();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const query = searchParams.get('q') || '';
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [query, setQuery] = useState('');
+  const [search, setSearch] = useState(query);
+  const [recent, setRecent] = useState<string[]>(() => loadRecentSearches(userId));
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const observer = useRef<IntersectionObserver | null>(null);
@@ -39,18 +43,14 @@ export default function RecipeList() {
     if (loading) return;
     if (observer.current) observer.current.disconnect();
     observer.current = new window.IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore) {
-        setPage(prev => prev + 1);
-      }
+      if (entries[0].isIntersecting && hasMore) setPage(prev => prev + 1);
     });
     if (node) observer.current.observe(node);
   }, [loading, hasMore]);
 
-  useEffect(() => {
-    setRecipes([]);
-    setPage(1);
-    setHasMore(true);
-  }, [query]);
+  useEffect(() => { setSearch(query); }, [query]);
+  useEffect(() => { setRecent(loadRecentSearches(userId)); }, [userId]);
+  useEffect(() => { setRecipes([]); setPage(1); setHasMore(true); }, [query]);
 
   useEffect(() => {
     setLoading(true);
@@ -67,15 +67,13 @@ export default function RecipeList() {
             } else {
               errorMessage = `HTTP ${res.status}: ${res.statusText || 'Unknown error'}`;
             }
-          } catch (e) {
+          } catch {
             errorMessage = `HTTP ${res.status}: ${res.statusText || 'Unknown error'}`;
           }
           throw new Error(errorMessage);
         }
         const text = await res.text();
-        if (!text) {
-          throw new Error('Empty response from server');
-        }
+        if (!text) throw new Error('Empty response from server');
         return JSON.parse(text);
       })
       .then(data => {
@@ -86,104 +84,61 @@ export default function RecipeList() {
       .finally(() => setLoading(false));
   }, [query, page]);
 
+  const applyQuery = (raw: string) => {
+    const q = raw.trim();
+    if (q) {
+      setRecent(rememberSearch(userId, q));
+      setSearchParams({ q });
+    } else {
+      setSearchParams({});
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setQuery(search);
+    applyQuery(search);
   };
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        background: 'background.default',
-        py: 4,
-      }}
-    >
+    <Box sx={{ minHeight: '100vh', background: 'background.default', py: 4 }}>
       <Container maxWidth="lg">
         <Box sx={{ textAlign: 'center', mb: 6 }}>
-          <Typography
-            component="h1"
-            gutterBottom
-            sx={{
-              fontFamily: brand.wordmarkFont,
-              fontWeight: 400,
-              fontSize: { xs: '1.85rem', sm: '2.4rem' },
-              color: 'primary.main',
-              lineHeight: 1.3,
-              mb: 2,
-            }}
-          >
+          <Typography component="h1" gutterBottom sx={{ fontFamily: brand.wordmarkFont, fontWeight: 400, fontSize: { xs: '1.85rem', sm: '2.4rem' }, color: 'primary.main', lineHeight: 1.3, mb: 2 }}>
             {t('tagline')}
           </Typography>
-          <Typography 
-            variant="h6" 
-            color="text.secondary"
-            sx={{ mb: 4, maxWidth: 600, mx: 'auto' }}
-          >
+          <Typography variant="h6" color="text.secondary" sx={{ mb: 4, maxWidth: 600, mx: 'auto' }}>
             {t('recipesSubtitle')}
           </Typography>
         </Box>
-        
-        <Box 
-          component="form" 
-          onSubmit={handleSubmit} 
-          sx={{ 
-            mb: 6, 
-            display: 'flex', 
-            gap: 2, 
-            maxWidth: 600, 
-            width: '100%', 
-            mx: 'auto',
-            background: 'white',
-            p: 3,
-            borderRadius: 3,
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
-          }}
-        >
-          <TextField
-            type="text"
-            label={t('searchPlaceholder')}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            variant="outlined"
-            size="small"
-            fullWidth
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-              },
-            }}
-          />
-          <Button 
-            type="submit" 
-            variant="contained"
-            sx={{ px: 4 }}
-          >
-            {t('search')}
-          </Button>
-                </Box>
-        
+        <Box component="form" onSubmit={handleSubmit} sx={{ mb: recent.length ? 2 : 6, display: 'flex', gap: 2, maxWidth: 600, width: '100%', mx: 'auto', background: 'white', p: 3, borderRadius: 3, boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)' }}>
+          <TextField type="text" label={t('searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} variant="outlined" size="small" fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
+          <Button type="submit" variant="contained" sx={{ px: 4 }}>{t('search')}</Button>
+        </Box>
+        {recent.length > 0 && (
+          <Box sx={{ maxWidth: 600, mx: 'auto', mb: 6 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>Recent searches</Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {recent.map(term => (
+                <Chip key={term} label={term} size="small" variant={term === query ? 'filled' : 'outlined'} onClick={() => applyQuery(term)} />
+              ))}
+            </Box>
+          </Box>
+        )}
         {loading && recipes.length === 0 && (
           <Box sx={{ textAlign: 'center', py: 8 }}>
             <CircularProgress size={60} sx={{ color: 'primary.main', mb: 2 }} />
             <Typography variant="h6" color="text.secondary">{t('loadingRecipes')}</Typography>
           </Box>
         )}
-        
         {error && (
           <Box sx={{ textAlign: 'center', py: 4 }}>
             <Typography color="error" variant="h6">{t('error')}: {error}</Typography>
           </Box>
         )}
-        
         {recipes.length === 0 && !loading ? (
           <Box sx={{ textAlign: 'center', py: 8 }}>
-            <Typography variant="h5" color="text.secondary" sx={{ mb: 2 }}>
-              {t('noRecipesFound')}
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Try adjusting your search terms or browse our collection.
-            </Typography>
+            <Typography variant="h5" color="text.secondary" sx={{ mb: 2 }}>{t('noRecipesFound')}</Typography>
+            <Typography variant="body1" color="text.secondary">Try adjusting your search terms or browse our collection.</Typography>
           </Box>
         ) : layout === 'list' ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, width: '100%' }}>
@@ -194,16 +149,7 @@ export default function RecipeList() {
             ))}
           </Box>
         ) : (
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
-              gap: { xs: 2, sm: 3, md: 4 },
-              width: '100%',
-              mx: 'auto',
-              justifyItems: 'center',
-            }}
-          >
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: { xs: 2, sm: 3, md: 4 }, width: '100%', mx: 'auto', justifyItems: 'center' }}>
             {recipes.map((recipe, i) => (
               <div key={recipe.id} ref={i === recipes.length - 1 ? lastRecipeRef : undefined} style={{ width: '100%' }}>
                 <RecipeCard recipe={recipe} />
@@ -211,13 +157,10 @@ export default function RecipeList() {
             ))}
           </Box>
         )}
-        
         {loading && recipes.length > 0 && (
           <Box sx={{ textAlign: 'center', py: 4 }}>
             <CircularProgress size={40} sx={{ color: 'primary.main' }} />
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Loading more recipes...
-            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Loading more recipes...</Typography>
           </Box>
         )}
       </Container>
