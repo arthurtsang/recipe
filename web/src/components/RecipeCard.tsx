@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardMedia, Typography, Box, CardActionArea, Rating, Chip, Tooltip } from '@mui/material';
 import { Link } from 'react-router-dom';
 
-import { Restaurant, AccessTime, Person } from '@mui/icons-material';
+import { AccessTime, Person } from '@mui/icons-material';
 import { recipeImageSrc } from '../utils/recipeImageSrc';
 
 type RecipeCardProps = {
@@ -24,61 +24,40 @@ type RecipeCardProps = {
   };
 };
 
+function formatEstimatedTime(estimatedTime?: string): string | null {
+  if (!estimatedTime || !String(estimatedTime).trim()) return null;
+  const minutes = parseInt(String(estimatedTime), 10);
+  if (Number.isNaN(minutes) || minutes <= 0) return null;
+  const hours = Math.floor(minutes / 60);
+  const remainingMins = minutes % 60;
+  if (hours > 0 && remainingMins === 0) return `${hours}h 0m`;
+  if (hours > 0) return `${hours}h ${remainingMins}m`;
+  return `0h ${minutes}m`;
+}
+
 const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
-  
-  // Extract some useful information from the recipe
   const getIngredientCount = () => {
     if (!recipe.versions || recipe.versions.length === 0) return 0;
-    const ingredients = recipe.versions[0].ingredients;
-    // Split by newlines and filter out empty lines, then count
+    const ingredients = recipe.versions[0].ingredients || '';
     const lines = ingredients.split('\n').filter(line => line.trim());
-    // Count actual ingredients (lines that contain ingredients, not just empty or instruction-like lines)
     return lines.filter(line => {
       const trimmed = line.trim();
-      // Skip lines that are just numbers, bullet points, or section headers
-      return trimmed && 
-             !/^\d+\.?\s*$/.test(trimmed) && // Skip just numbers
-             !/^[•\-\*]\s*$/.test(trimmed) && // Skip just bullet points
-             !/^(ingredients?|for|serves?|yield|makes?):/i.test(trimmed); // Skip headers
+      return trimmed &&
+             !/^\d+\.?\s*$/.test(trimmed) &&
+             !/^[\u2022\-\*]\s*$/.test(trimmed) &&
+             !/^(ingredients?|for|serves?|yield|makes?):/i.test(trimmed);
     }).length;
   };
 
   const getInstructionCount = () => {
     if (!recipe.versions || recipe.versions.length === 0) return 0;
-    const instructions = recipe.versions[0].instructions;
+    const instructions = recipe.versions[0].instructions || '';
     return instructions.split('\n').filter(line => line.trim()).length;
-  };
-
-  // Use AI-analyzed data if available, otherwise show pending status
-  const getEstimatedTime = () => {
-    if (recipe.estimatedTime) {
-      const minutes = parseInt(recipe.estimatedTime);
-      if (minutes >= 60) {
-        const hours = Math.floor(minutes / 60);
-        const remainingMins = minutes % 60;
-        if (remainingMins === 0) {
-          return `${hours}h`;
-        } else {
-          return `${hours}h ${remainingMins}m`;
-        }
-      } else {
-        return `${minutes}m`;
-      }
-    }
-    return 'Pending...';
-  };
-
-  const getDifficulty = () => {
-    if (recipe.difficulty) {
-      return { level: recipe.difficulty, color: 'primary' as const };
-    }
-    return { level: 'Undetermined', color: 'primary' as const };
   };
 
   const ingredientCount = getIngredientCount();
   const instructionCount = getInstructionCount();
-  const estimatedTime = getEstimatedTime();
-  const difficulty = getDifficulty();
+  const estimatedTime = formatEstimatedTime(recipe.estimatedTime);
 
   const imageSrc = recipe.imageUrl ? recipeImageSrc(recipe.imageUrl) : undefined;
 
@@ -105,8 +84,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
           <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, lineHeight: 1.2 }}>
             {recipe.title}
           </Typography>
-          
-          {/* Show average rating if available */}
+
           {typeof recipe.averageRating === 'number' && (
             <Box display="flex" alignItems="center" mb={1.5}>
               <Rating value={recipe.averageRating} precision={0.1} readOnly size="small" />
@@ -116,61 +94,29 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
             </Box>
           )}
 
-          {/* Recipe stats and info */}
-          <Box sx={{ mb: 1.5 }}>
-            <Box display="flex" gap={1} flexWrap="wrap" mb={1}>
-              <Chip 
-                icon={<Restaurant />} 
-                label={`${ingredientCount} ingredients`} 
-                size="small" 
-                variant="outlined"
-                color="primary"
-              />
-              <Tooltip 
-                title={recipe.timeReasoning || 'No reasoning available'} 
-                placement="top"
-                arrow
-              >
-                <Chip 
-                  icon={<AccessTime />} 
-                  label={estimatedTime} 
-                  size="small" 
-                  variant="outlined"
-                  color="primary"
-                />
-              </Tooltip>
-            </Box>
-            <Tooltip 
-              title={recipe.difficultyReasoning || 'No reasoning available'} 
-              placement="top"
-              arrow
-            >
-              <Chip 
-                label={difficulty.level} 
-                size="small" 
-                color={difficulty.color}
-                sx={{ mb: 1 }}
-              />
-            </Tooltip>
-          </Box>
-
-          {/* Description or fallback content */}
-          {recipe.description ? (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, lineHeight: 1.4 }}>
-              {recipe.description}
-            </Typography>
-          ) : (
+          {estimatedTime && (
             <Box sx={{ mb: 1.5 }}>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                {instructionCount} steps • {ingredientCount} ingredients
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                Click to view full recipe details
-              </Typography>
+              <Tooltip title={recipe.timeReasoning || ''} placement="top" arrow>
+                <Chip icon={<AccessTime />} label={estimatedTime} size="small" variant="outlined" color="primary" />
+              </Tooltip>
             </Box>
           )}
 
-          {/* Image */}
+          <Box sx={{ mb: 1.5 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+              {instructionCount} steps • {ingredientCount} ingredients
+            </Typography>
+            {recipe.description ? (
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.4 }}>
+                {recipe.description}
+              </Typography>
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                Click to view full recipe details
+              </Typography>
+            )}
+          </Box>
+
           {imageSrc && (
             <Box mb={1.5} display="flex" justifyContent="center">
               <CardMedia
@@ -182,7 +128,6 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
             </Box>
           )}
 
-          {/* Author info — use displayName (alias-first) from API so alias is consistent app-wide */}
           {recipe.user && (
             <Box display="flex" alignItems="center" sx={{ mt: 'auto', pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
               <Person sx={{ fontSize: 16, mr: 0.5, color: 'text.secondary' }} />
@@ -191,19 +136,13 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
                 const displayName = u.displayName ?? ((u.alias && u.alias.trim()) || u.name || u.email);
                 const linkAlias = (u.alias && u.alias.trim()) || null;
                 return linkAlias ? (
-                  <Link
-                    to={`/users/${linkAlias}`}
-                    style={{ textDecoration: 'none', color: 'inherit' }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
+                  <Link to={`/users/${linkAlias}`} style={{ textDecoration: 'none', color: 'inherit' }} onClick={(e) => e.stopPropagation()}>
                     <Typography variant="body2" color="text.secondary" sx={{ '&:hover': { textDecoration: 'underline' } }}>
                       {displayName}
                     </Typography>
                   </Link>
                 ) : (
-                  <Typography variant="body2" color="text.secondary">
-                    {displayName}
-                  </Typography>
+                  <Typography variant="body2" color="text.secondary">{displayName}</Typography>
                 );
               })()}
             </Box>
