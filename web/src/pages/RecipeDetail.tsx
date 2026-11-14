@@ -622,6 +622,38 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   return (
     <Paper sx={{ p: 4, maxWidth: 900, mx: 'auto', width: '100%' }}>
       <Button variant="text" onClick={handleBack} sx={{ mb: 2 }}>&larr; {t('back')}</Button>
+      {versions.length > 0 && (
+        <Box mb={2} sx={{ position: 'relative' }}>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            {versions.length > 1 ? t('versions') : t('version')} ({versions.length}):
+          </Typography>
+          <Box sx={{ position: 'relative', overflowX: 'auto', maxWidth: '100%' }}>
+            <List dense sx={{ display: 'flex', flexDirection: 'row', gap: 1, p: 0, minHeight: 48 }}>
+              {versions.map((v: Version, idx: number) => (
+                <ListItem key={v.id || idx} disablePadding sx={{ width: 'auto', minWidth: 120 }}>
+                  <ListItemButton selected={idx === selectedVersionIdx} onClick={() => handleSelectVersion(idx)}>
+                    <ListItemText primary={v.name ? v.name : (v.createdAt ? new Date(v.createdAt).toLocaleString() : `${t('version')} ${idx + 1}`)} />
+                  </ListItemButton>
+                </ListItem>
+              ))}
+            </List>
+          </Box>
+          {versions.length > 1 && (
+            <Button
+              sx={{ mt: 1 }}
+              variant={highlightDiffs ? 'contained' : 'outlined'}
+              color={highlightDiffs ? 'error' : 'primary'}
+              onClick={() => {
+                const next = !highlightDiffs;
+                setHighlightDiffs(next);
+                try { localStorage.setItem('recipeHighlightDiffs', next ? '1' : '0'); } catch { /* ignore */ }
+              }}
+            >
+              {highlightDiffs ? 'Differences highlighted' : 'Highlight differences'}
+            </Button>
+          )}
+        </Box>
+      )}
       <Box>
         <Slide direction="down" in={hasUnsavedChanges} mountOnEnter unmountOnExit>
           <Alert severity="warning" action={<Button color="inherit" size="small" onClick={handleCancel}>Cancel</Button>} sx={{ mb: 2, position: 'sticky', top: 0, zIndex: 1000 }}>
@@ -638,17 +670,6 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
             )}
           </Box>
         )}
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <TextField
-          size="small"
-          label="Multiply"
-          type="number"
-          value={multiplierInput}
-          onChange={(e) => setMultiplierInput(e.target.value)}
-          inputProps={{ step: 'any', min: 0 }}
-          sx={{ width: 140 }}
-        />
       </Box>
       {(displayImageUrl || (isOwner && isEditing)) && (
         <Box mb={2}>
@@ -720,7 +741,18 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           )}
         </Box>
       </Box>
-      <Typography variant="h6" mt={2}>{t('ingredients')}</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mt: 2 }}>
+        <Typography variant="h6">{t('ingredients')}</Typography>
+        <TextField
+          size="small"
+          label="Multiply"
+          type="number"
+          value={multiplierInput}
+          onChange={(e) => setMultiplierInput(e.target.value)}
+          inputProps={{ step: 'any', min: 0 }}
+          sx={{ width: 140 }}
+        />
+      </Box>
       <Box sx={{ background: '#f5f5f5', p: 2, borderRadius: 1, overflowX: 'auto', '& p': { margin: '0.25em 0' }, '& ul, & ol': { margin: '0.25em 0', pl: 2 } }}>
         {isOwner && isEditing ? (
           <TextField value={editFields?.ingredients || ''} onChange={e => handleFieldChange('ingredients', e.target.value)} variant="standard" fullWidth multiline minRows={4} placeholder="One per line or use markdown." InputProps={{ disableUnderline: true, style: { fontFamily: 'inherit', fontSize: 16 } }} />
@@ -768,38 +800,6 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           </Box>
         )}
       </Box>
-      {versions.length > 0 && (
-        <Box mt={3} mb={2} sx={{ position: 'relative' }}>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            {versions.length > 1 ? t('versions') : t('version')} ({versions.length}):
-          </Typography>
-          <Box sx={{ position: 'relative', overflowX: 'auto', maxWidth: '100%' }}>
-            <List dense sx={{ display: 'flex', flexDirection: 'row', gap: 1, p: 0, minHeight: 48 }}>
-              {versions.map((v: Version, idx: number) => (
-                <ListItem key={v.id || idx} disablePadding sx={{ width: 'auto', minWidth: 120 }}>
-                  <ListItemButton selected={idx === selectedVersionIdx} onClick={() => handleSelectVersion(idx)}>
-                    <ListItemText primary={v.name ? v.name : (v.createdAt ? new Date(v.createdAt).toLocaleString() : `${t('version')} ${idx + 1}`)} />
-                  </ListItemButton>
-                </ListItem>
-              ))}
-            </List>
-          </Box>
-          {versions.length > 1 && (
-            <Button
-              sx={{ mt: 1 }}
-              variant={highlightDiffs ? 'contained' : 'outlined'}
-              color={highlightDiffs ? 'error' : 'primary'}
-              onClick={() => {
-                const next = !highlightDiffs;
-                setHighlightDiffs(next);
-                try { localStorage.setItem('recipeHighlightDiffs', next ? '1' : '0'); } catch { /* ignore */ }
-              }}
-            >
-              {highlightDiffs ? 'Differences highlighted' : 'Highlight differences'}
-            </Button>
-          )}
-        </Box>
-      )}
       {isOwner && (
         <Box mt={3}>
           {validateNotification && (
