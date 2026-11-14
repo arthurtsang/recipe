@@ -818,13 +818,6 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           </Box>
         )}
       </Box>
-      <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-        {isOwner && isEditing ? (
-          <TextField value={editFields?.description || ''} onChange={e => handleFieldChange('description', e.target.value)} variant="standard" fullWidth multiline InputProps={{ disableUnderline: true, style: { fontSize: 18 } }} />
-        ) : (
-          editFields?.description || selectedVersion.description
-        )}
-      </Typography>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 2, mt: 2 }}>
         <TextField
           size="small"
