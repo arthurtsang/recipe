@@ -424,11 +424,13 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
 
   const wordsSharedWithEveryOther = (line: string, otherTexts: string[]) => {
     const mine = wordsInLine(line);
+    if (mine.size === 0) return { wholeLine: false, shared: mine };
     let shared = new Set(mine);
+    let wholeLine = false;
     otherTexts.forEach((text) => {
       const otherLines = String(text ?? '').replace(/\r\n/g, '\n').split('\n');
       let best = new Set<string>();
-      let bestScore = -1;
+      let bestScore = 0;
       otherLines.forEach((otherLine) => {
         const otherWords = wordsInLine(otherLine);
         let score = 0;
@@ -438,21 +440,24 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           best = otherWords;
         }
       });
+      // Less than half the words match: this line is not in that variation.
+      if (bestScore / mine.size < 0.5) wholeLine = true;
       const next = new Set<string>();
       shared.forEach((word) => { if (best.has(word)) next.add(word); });
       shared = next;
     });
-    return shared;
+    return { wholeLine, shared };
   };
 
   const renderDiffLines = (current: string | undefined, otherTexts: string[]) => (
     <>
       {String(current ?? '').replace(/\r\n/g, '\n').split('\n').map((line, i) => {
-        const shared = wordsSharedWithEveryOther(line, otherTexts);
+        const { wholeLine, shared } = wordsSharedWithEveryOther(line, otherTexts);
         const parts = line.split(/(\s+)/);
         return (
-          <Typography key={i} component="div" sx={{ fontSize: 16, whiteSpace: 'pre-wrap', minHeight: '1.4em' }}>
+          <Typography key={i} component="div" sx={{ fontSize: 16, whiteSpace: 'pre-wrap', minHeight: '1.4em', color: wholeLine ? '#c62828' : 'inherit', fontWeight: wholeLine ? 700 : 400 }}>
             {line ? parts.map((part, j) => {
+              if (wholeLine) return <span key={j}>{part}</span>;
               const key = wordKey(part);
               const changed = !!key && !shared.has(key);
               return changed
@@ -570,11 +575,6 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
         </Box>
       </Box>
       <Typography variant="h6" mt={2}>{t('ingredients')}</Typography>
-      {showDiffs && (
-        <Typography variant="body2" sx={{ color: '#c62828', mb: 0.5 }}>
-          Red words are not in every variation.
-        </Typography>
-      )}
       <Box sx={{ background: '#f5f5f5', p: 2, borderRadius: 1, overflowX: 'auto', '& p': { margin: '0.25em 0' }, '& ul, & ol': { margin: '0.25em 0', pl: 2 } }}>
         {isOwner && isEditing ? (
           <TextField value={editFields?.ingredients || ''} onChange={e => handleFieldChange('ingredients', e.target.value)} variant="standard" fullWidth multiline minRows={4} placeholder="One per line or use markdown." InputProps={{ disableUnderline: true, style: { fontFamily: 'inherit', fontSize: 16 } }} />
