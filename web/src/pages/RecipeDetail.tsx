@@ -59,6 +59,10 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [newVariationOpen, setNewVariationOpen] = useState(false);
   const [newVariationName, setNewVariationName] = useState('');
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameName, setRenameName] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
   const [averageRating, setAverageRating] = useState<number | null>(null);
   const [userRating, setUserRating] = useState<number | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -311,6 +315,39 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     }
   };
 
+  const handleRenameVariation = async () => {
+    const variationId = selectedVersion?.id;
+    const name = renameName.trim();
+    if (!id || !variationId || !name) return;
+    setRenaming(true);
+    setRenameError(null);
+    try {
+      const res = await fetch(`/api/recipes/${id}/versions/${variationId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Failed to rename variation');
+      }
+      setRecipe((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          versions: (prev.versions || []).map((v) => (v.id === variationId ? { ...v, name } : v)),
+        };
+      });
+      setEditFields((prev) => (prev ? { ...prev, name } : prev));
+      setRenameOpen(false);
+    } catch (err: unknown) {
+      setRenameError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRenaming(false);
+    }
+  };
+
   const variationLabelOf = (v: Version | undefined, idx: number) => {
     const named = v?.name?.trim();
     if (named) return named;
@@ -537,6 +574,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
               <Button variant="contained" color="primary" onClick={handleSave} startIcon={<SaveIcon />}>{t('save', 'Save')}</Button>
             )}
             <Button variant="outlined" onClick={() => { setNewVariationName(''); setNewVariationOpen(true); }}>New Variation</Button>
+            <Button variant="outlined" onClick={() => { setRenameName(selectedVersion?.name || ''); setRenameError(null); setRenameOpen(true); }} disabled={!selectedVersion?.id}>Rename</Button>
             {recipe?.sourceUrl && !recipe.validated && (
               <Button variant="outlined" size="medium" onClick={handleValidate} disabled={validating} startIcon={validating ? <CircularProgress size={16} /> : <VerifiedIcon />} title="Mark this imported recipe as a Secret Garden recipe. It will no longer update from the original source.">
                 {validating ? 'Validating…' : t('validate', 'Validate')}
@@ -546,6 +584,18 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           </Box>
         </Box>
       )}
+      <Dialog open={renameOpen} onClose={() => { if (!renaming) setRenameOpen(false); }}>
+        <DialogTitle>Rename variation</DialogTitle>
+        <DialogContent>
+          <Typography gutterBottom>This only changes the name. Ingredients and instructions stay as they are.</Typography>
+          <TextField autoFocus margin="dense" label="Variation name" type="text" fullWidth value={renameName} onChange={e => { setRenameName(e.target.value); setRenameError(null); }} />
+          {renameError && <Alert severity="error" sx={{ mt: 1 }}>{renameError}</Alert>}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRenameOpen(false)} disabled={renaming}>{t('cancel')}</Button>
+          <Button onClick={handleRenameVariation} variant="contained" disabled={renaming || !renameName.trim()}>{renaming ? 'Saving…' : 'Save name'}</Button>
+        </DialogActions>
+      </Dialog>
       <Dialog open={newVariationOpen} onClose={() => setNewVariationOpen(false)}>
         <DialogTitle>New Variation</DialogTitle>
         <DialogContent>

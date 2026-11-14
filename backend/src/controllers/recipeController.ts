@@ -601,6 +601,30 @@ export async function deleteRecipe(req: Request, res: Response) {
   }
 }
 
+export async function renameRecipeVersion(req: Request, res: Response) {
+  try {
+    const { id, versionId } = req.params;
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    if (!name) return res.status(400).json({ error: 'Variation name is required' });
+    if (!req.oidc?.user?.email) return res.status(401).json({ error: 'Not authenticated' });
+    const dbUser = await prisma.user.findUnique({ where: { email: req.oidc.user.email.toLowerCase() } });
+    if (!dbUser) return res.status(401).json({ error: 'User not found' });
+
+    const recipe = await prisma.recipe.findUnique({ where: { id } });
+    if (!recipe) return res.status(404).json({ error: 'Recipe not found' });
+    if (recipe.userId !== dbUser.id) return res.status(403).json({ error: 'Not authorized to rename this variation' });
+
+    const version = await prisma.recipeVersion.findFirst({ where: { id: versionId, recipeId: id } });
+    if (!version) return res.status(404).json({ error: 'Variation not found' });
+
+    await prisma.recipeVersion.update({ where: { id: versionId }, data: { name } });
+    res.json({ id: versionId, name });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to rename variation' });
+  }
+}
+
 export async function deleteRecipeVersion(req: Request, res: Response) {
   try {
     const { id, versionId } = req.params;

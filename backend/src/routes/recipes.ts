@@ -34,6 +34,7 @@ router.put('/:id', requiresEnabledUser(), requireRecipeContent, recipeController
 router.post('/:id/validate', requiresEnabledUser(), validateRecipe);
 router.delete('/:id', requiresEnabledUser(), recipeController.deleteRecipe);
 router.delete('/:id/versions/:versionId', requiresEnabledUser(), recipeController.deleteRecipeVersion);
+router.patch('/:id/versions/:versionId', requiresEnabledUser(), recipeController.renameRecipeVersion);
 router.get('/:id/ratings', recipeController.getRecipeRatings);
 router.post('/:id/ratings', requiresEnabledUser(), recipeController.rateRecipe);
 router.post('/search', recipeController.searchRecipes);
