@@ -168,21 +168,14 @@ export async function updateRecipe(id: string, data: {
 }
 
 export async function deleteRecipe(id: string) {
-  // Delete in the correct order to handle foreign key constraints
+  // Clear the current-variation pointer first. It references a variation row,
+  // so deleting variations while it is set violates the foreign key.
   return prisma.$transaction(async (tx) => {
-    // First, delete all ratings for this recipe
+    await tx.recipe.update({ where: { id }, data: { currentVersionId: null } });
     await tx.rating.deleteMany({ where: { recipeId: id } });
-    
-    // Delete all comments for this recipe
     await tx.comment.deleteMany({ where: { recipeId: id } });
-    
-    // Delete all recipe versions for this recipe
     await tx.recipeVersion.deleteMany({ where: { recipeId: id } });
-    
-    // Delete all recipe tags for this recipe
     await tx.recipeTag.deleteMany({ where: { recipeId: id } });
-    
-    // Finally, delete the recipe itself
     return tx.recipe.delete({ where: { id } });
   });
 }

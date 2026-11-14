@@ -610,33 +610,41 @@ export async function deleteRecipeVersion(req: Request, res: Response) {
 
     const recipe = await prisma.recipe.findUnique({ where: { id }, include: { versions: true } });
     if (!recipe) return res.status(404).json({ error: 'Recipe not found' });
-    if (recipe.userId !== dbUser.id) return res.status(403).json({ error: 'Not authorized to delete this version' });
+    if (recipe.userId !== dbUser.id) return res.status(403).json({ error: 'Not authorized to delete this variation' });
 
     const version = await prisma.recipeVersion.findUnique({ where: { id: versionId } });
-    if (!version) return res.status(404).json({ error: 'Version not found' });
-    if (version.recipeId !== id) return res.status(400).json({ error: 'Version does not belong to this recipe' });
-
-    // Delete the version's local image file
-    deleteStoredImageIfExists(version.imageUrl);
-
-    await prisma.recipeVersion.delete({ where: { id: versionId } });
-
-    // If we deleted the current version, point recipe to another version or clear
-    if (recipe.currentVersionId === versionId) {
-      const remaining = recipe.versions
-        .filter((v) => v.id !== versionId)
-        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      const nextVersion = remaining.length > 0 ? remaining[remaining.length - 1] : null;
-      await prisma.recipe.update({
-        where: { id },
-        data: {
-          currentVersionId: nextVersion?.id ?? null,
-          title: nextVersion?.title ?? recipe.title,
-          description: nextVersion?.description ?? recipe.description,
-          imageUrl: nextVersion?.imageUrl ?? null,
-        },
-      });
+    if (!version) return res.status(404).json({ error: 'Variation not found' });
+    if (version.recipeId !== id) return res.status(400).json({ error: 'Variation does not belong to this recipe' });
+    if (recipe.versions.length <= 1) {
+      return res.status(400).json({ error: 'Cannot delete the only variation. Delete the recipe instead.' });
     }
+
+    const remaining = recipe.versions
+      .filter((v) => v.id !== versionId)
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    const nextVersion = remaining[remaining.length - 1];
+    if (!nextVersion) {
+      return res.status(400).json({ error: 'Cannot delete the only variation. Delete the recipe instead.' });
+    }
+    const imageStillUsed = remaining.some((v) => v.imageUrl && v.imageUrl === version.imageUrl)
+      || recipe.imageUrl === version.imageUrl;
+
+    await prisma.$transaction(async (tx) => {
+      if (recipe.currentVersionId === versionId) {
+        await tx.recipe.update({
+          where: { id },
+          data: {
+            currentVersionId: nextVersion.id,
+            title: nextVersion.title ?? recipe.title,
+            description: nextVersion.description ?? recipe.description,
+            imageUrl: nextVersion.imageUrl ?? null,
+          },
+        });
+      }
+      await tx.recipeVersion.delete({ where: { id: versionId } });
+    });
+
+    if (!imageStillUsed) deleteStoredImageIfExists(version.imageUrl);
 
     const updated = await prisma.recipe.findUnique({
       where: { id },
@@ -646,7 +654,7 @@ export async function deleteRecipeVersion(req: Request, res: Response) {
     res.json(payload);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to delete version' });
+    res.status(500).json({ error: 'Failed to delete variation' });
   }
 }
 

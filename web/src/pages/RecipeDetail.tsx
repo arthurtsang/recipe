@@ -55,6 +55,8 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   const [editFields, setEditFields] = useState<Version | null>(null);
   const [selectedVersionIdx, setSelectedVersionIdx] = useState(0);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [newVariationOpen, setNewVariationOpen] = useState(false);
   const [newVariationName, setNewVariationName] = useState('');
   const [averageRating, setAverageRating] = useState<number | null>(null);
@@ -309,28 +311,61 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     }
   };
 
+  const variationLabelOf = (v: Version | undefined, idx: number) => {
+    const named = v?.name?.trim();
+    if (named) return named;
+    if (v?.createdAt) return new Date(v.createdAt).toLocaleString();
+    return `Variation ${idx + 1}`;
+  };
+
   const handleDelete = async (deleteWholeRecipe = false) => {
-    setDeleteDialogOpen(false);
     if (!id) return;
+    const variationId = selectedVersion?.id;
+    const label = variationLabelOf(selectedVersion, selectedVersionIdx);
+    if (!deleteWholeRecipe) {
+      if (!variationId) {
+        setDeleteError('No variation selected');
+        return;
+      }
+      if (deleteConfirmName.trim() !== label) {
+        setDeleteError(`Type “${label}” to confirm`);
+        return;
+      }
+    }
     setDeleting(true);
+    setDeleteError(null);
     try {
       if (deleteWholeRecipe) {
         const res = await fetch(`/api/recipes/${id}`, { method: 'DELETE', credentials: 'include' });
-        if (!res.ok) throw new Error('Failed to delete recipe');
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || 'Failed to delete recipe');
+        }
+        setDeleteDialogOpen(false);
         navigate('/');
         return;
       }
-      if (!selectedVersion?.id) return;
-      const res = await fetch(`/api/recipes/${id}/versions/${selectedVersion.id}`, { method: 'DELETE', credentials: 'include' });
-      if (!res.ok) throw new Error('Failed to delete variation');
+      const res = await fetch(`/api/recipes/${id}/versions/${variationId}`, { method: 'DELETE', credentials: 'include' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Failed to delete variation');
+      }
       const recipeRes = await fetch(`/api/recipes/${id}`);
       const data = await recipeRes.json();
-      setRecipe(data);
-      setSelectedVersionIdx(0);
-      const firstVer = data.versions?.[0];
-      setEditFields(firstVer ? { ...firstVer, title: data.title, description: data.description, imageUrl: firstVer.imageUrl ?? data.imageUrl ?? '' } : null);
+      const vers = Array.isArray(data.versions) ? data.versions : [];
+      setRecipe({ ...data, versions: vers });
+      let newIdx = 0;
+      if (data.currentVersionId && vers.length > 0) {
+        const idx = vers.findIndex((v: Version) => v.id === data.currentVersionId);
+        if (idx >= 0) newIdx = idx;
+      }
+      setSelectedVersionIdx(newIdx);
+      const next = vers[newIdx];
+      setEditFields(next ? { ...next, title: data.title, description: data.description, imageUrl: next.imageUrl ?? data.imageUrl ?? '' } : null);
+      setDeleteDialogOpen(false);
+      setDeleteConfirmName('');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      setDeleteError(err instanceof Error ? err.message : String(err));
     } finally {
       setDeleting(false);
     }
@@ -507,7 +542,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
                 {validating ? 'Validating…' : t('validate', 'Validate')}
               </Button>
             )}
-            <Button variant="outlined" color="error" onClick={() => setDeleteDialogOpen(true)} disabled={deleting} startIcon={<DeleteIcon />}>{t('delete')}</Button>
+            <Button variant="outlined" color="error" onClick={() => { setDeleteConfirmName(''); setDeleteError(null); setDeleteDialogOpen(true); }} disabled={deleting} startIcon={<DeleteIcon />}>{t('delete')}</Button>
           </Box>
         </Box>
       )}
@@ -522,15 +557,34 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           <Button onClick={handleCreateVariation} variant="contained" disabled={!newVariationName.trim()}>Create</Button>
         </DialogActions>
       </Dialog>
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
-        <DialogTitle>{t('delete')}</DialogTitle>
+      <Dialog open={deleteDialogOpen} onClose={() => { if (!deleting) setDeleteDialogOpen(false); }}>
+        <DialogTitle>Delete variation</DialogTitle>
         <DialogContent>
-          <Typography gutterBottom>{t('deleteVersionOrRecipe')}</Typography>
+          <Typography gutterBottom>
+            Type <strong>{variationLabelOf(selectedVersion, selectedVersionIdx)}</strong> to delete this variation.
+          </Typography>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Variation name"
+            type="text"
+            fullWidth
+            value={deleteConfirmName}
+            onChange={e => { setDeleteConfirmName(e.target.value); setDeleteError(null); }}
+          />
+          {deleteError && <Alert severity="error" sx={{ mt: 1 }}>{deleteError}</Alert>}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>{t('cancel')}</Button>
-          <Button onClick={() => handleDelete(false)} color="error" variant="contained">{t('deleteVersion')}</Button>
-          <Button onClick={() => handleDelete(true)} color="error" variant="outlined">{t('deleteRecipe')}</Button>
+          <Button onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>{t('cancel')}</Button>
+          <Button
+            onClick={() => handleDelete(false)}
+            color="error"
+            variant="contained"
+            disabled={deleting || deleteConfirmName.trim() !== variationLabelOf(selectedVersion, selectedVersionIdx)}
+          >
+            {deleting ? 'Deleting…' : 'Delete variation'}
+          </Button>
+          <Button onClick={() => handleDelete(true)} color="error" variant="outlined" disabled={deleting}>{t('deleteRecipe')}</Button>
         </DialogActions>
       </Dialog>
     </Paper>
