@@ -622,12 +622,12 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   return (
     <Paper sx={{ p: 4, maxWidth: 900, mx: 'auto', width: '100%' }}>
       <Button variant="text" onClick={handleBack} sx={{ mb: 2 }}>&larr; {t('back')}</Button>
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 2 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 1 }}>
         {versions.length > 1 && (
           <Button
             variant={highlightDiffs ? 'contained' : 'outlined'}
             color={highlightDiffs ? 'error' : 'primary'}
-            sx={{ borderRadius: 999, textTransform: 'none' }}
+            sx={{ borderRadius: 2, textTransform: 'none' }}
             onClick={() => {
               const next = !highlightDiffs;
               setHighlightDiffs(next);
@@ -647,24 +647,24 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
             {v.name ? v.name : (v.createdAt ? new Date(v.createdAt).toLocaleString() : `${t('version')} ${idx + 1}`)}
           </Button>
         ))}
-        {isOwner && (
-          <>
-            {!isEditing ? (
-              <Button variant="outlined" onClick={handleEdit} startIcon={<EditIcon />} sx={{ borderRadius: 999, textTransform: 'none' }}>{t('edit', 'Edit')}</Button>
-            ) : (
-              <Button variant="contained" color="primary" onClick={handleSave} startIcon={<SaveIcon />} sx={{ borderRadius: 999, textTransform: 'none' }}>{t('save', 'Save')}</Button>
-            )}
-            <Button variant="outlined" onClick={() => { setNewVariationName(''); setNewVariationOpen(true); }} sx={{ borderRadius: 999, textTransform: 'none' }}>New Variation</Button>
-            <Button variant="outlined" onClick={() => { setRenameName(selectedVersion?.name || ''); setRenameError(null); setRenameOpen(true); }} disabled={!selectedVersion?.id} sx={{ borderRadius: 999, textTransform: 'none' }}>Rename</Button>
-            {recipe?.sourceUrl && !recipe.validated && (
-              <Button variant="outlined" onClick={handleValidate} disabled={validating} startIcon={validating ? <CircularProgress size={16} /> : <VerifiedIcon />} sx={{ borderRadius: 999, textTransform: 'none' }} title="Mark this imported recipe as a Secret Garden recipe. It will no longer update from the original source.">
-                {validating ? 'Validating…' : t('validate', 'Validate')}
-              </Button>
-            )}
-            <Button variant="outlined" color="error" onClick={() => { setDeleteConfirmName(''); setDeleteError(null); setDeleteDialogOpen(true); }} disabled={deleting} startIcon={<DeleteIcon />} sx={{ borderRadius: 999, textTransform: 'none' }}>{t('delete')}</Button>
-          </>
-        )}
       </Box>
+      {isOwner && (
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 2 }}>
+          {!isEditing ? (
+            <Button variant="outlined" onClick={handleEdit} startIcon={<EditIcon />} sx={{ borderRadius: 2, textTransform: 'none' }}>{t('edit', 'Edit')}</Button>
+          ) : (
+            <Button variant="contained" color="primary" onClick={handleSave} startIcon={<SaveIcon />} sx={{ borderRadius: 2, textTransform: 'none' }}>{t('save', 'Save')}</Button>
+          )}
+          <Button variant="outlined" onClick={() => { setRenameName(selectedVersion?.name || ''); setRenameError(null); setRenameOpen(true); }} disabled={!selectedVersion?.id} sx={{ borderRadius: 2, textTransform: 'none' }}>Rename</Button>
+          <Button variant="outlined" onClick={() => { setNewVariationName(''); setNewVariationOpen(true); }} sx={{ borderRadius: 2, textTransform: 'none' }}>New Variation</Button>
+          <Button variant="outlined" color="error" onClick={() => { setDeleteConfirmName(''); setDeleteError(null); setDeleteDialogOpen(true); }} disabled={deleting} startIcon={<DeleteIcon />} sx={{ borderRadius: 2, textTransform: 'none' }}>{t('delete')}</Button>
+          {recipe?.sourceUrl && !recipe.validated && (
+            <Button variant="outlined" onClick={handleValidate} disabled={validating} startIcon={validating ? <CircularProgress size={16} /> : <VerifiedIcon />} sx={{ borderRadius: 2, textTransform: 'none' }} title="Mark this imported recipe as a Secret Garden recipe. It will no longer update from the original source.">
+              {validating ? 'Validating…' : t('validate', 'Validate')}
+            </Button>
+          )}
+        </Box>
+      )}
       {isOwner && validateNotification && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setValidateNotification(null)}>{validateNotification}</Alert>
       )}
