@@ -525,6 +525,10 @@ export async function updateRecipe(req: Request, res: Response) {
       }
     }
 
+    const sharedImage = localImageUrl ?? null;
+    await prisma.recipe.update({ where: { id }, data: { imageUrl: sharedImage } });
+    await prisma.recipeVersion.updateMany({ where: { recipeId: id }, data: { imageUrl: sharedImage } });
+
     // Return the updated recipe with versions (same shape as GET so frontend does not crash)
     const recipe = await prisma.recipe.findUnique({
       where: { id },

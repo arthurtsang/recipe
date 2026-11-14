@@ -97,7 +97,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
         setSelectedVersionIdx(idx);
         if (versions.length > 0) {
           const v = versions[idx];
-          setEditFields({ ...v, title: data.title, description: data.description, imageUrl: v.imageUrl ?? data.imageUrl ?? '' });
+          setEditFields({ ...v, title: data.title, description: data.description, imageUrl: data.imageUrl ?? '' });
         }
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
@@ -153,7 +153,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     setSelectedVersionIdx(idx);
     if (!recipe) return;
     const ver = versions[idx];
-    setEditFields({ ...ver, title: recipe.title, description: recipe.description, imageUrl: ver?.imageUrl ?? recipe.imageUrl ?? '' });
+    setEditFields({ ...ver, title: recipe.title, description: recipe.description, imageUrl: recipe.imageUrl ?? '' });
   };
 
   const handleEdit = () => {
@@ -221,7 +221,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       if (vers.length > 0) {
         setSelectedVersionIdx(newIdx);
         const v = vers[newIdx];
-        updatedEditFields = { ...(v || {}), title: data.title ?? '', description: data.description ?? '', imageUrl: v?.imageUrl ?? data.imageUrl ?? '' };
+        updatedEditFields = { ...(v || {}), title: data.title ?? '', description: data.description ?? '', imageUrl: data.imageUrl ?? '' };
       } else {
         setSelectedVersionIdx(0);
         updatedEditFields = { ...editFields, title: data.title, description: data.description, imageUrl: data.imageUrl ?? '' };
@@ -258,7 +258,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       setSelectedVersionIdx(newIdx);
       if (vers.length > 0) {
         const v = vers[newIdx];
-        const updated = { ...(v || {}), title: data.title ?? '', description: data.description ?? '', imageUrl: v?.imageUrl ?? data.imageUrl ?? '' };
+        const updated = { ...(v || {}), title: data.title ?? '', description: data.description ?? '', imageUrl: data.imageUrl ?? '' };
         setEditFields(updated);
         setOriginalFields(updated);
       }
@@ -395,7 +395,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       }
       setSelectedVersionIdx(newIdx);
       const next = vers[newIdx];
-      setEditFields(next ? { ...next, title: data.title, description: data.description, imageUrl: next.imageUrl ?? data.imageUrl ?? '' } : null);
+      setEditFields(next ? { ...next, title: data.title, description: data.description, imageUrl: data.imageUrl ?? '' } : null);
       setDeleteDialogOpen(false);
       setDeleteConfirmName('');
     } catch (err: unknown) {
@@ -536,7 +536,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       return { original: '', scaled: '', ingredient: line.trim(), diff, raw };
     });
     return (
-      <Box sx={{ display: 'grid', gridTemplateColumns: showAdjusted ? 'max-content max-content minmax(0, 1fr)' : 'max-content minmax(0, 1fr)', columnGap: 3, rowGap: 0.5, justifyItems: 'start', alignItems: 'baseline' }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: '7.5rem 7.5rem minmax(0, 1fr)', columnGap: 3, rowGap: 0.5, justifyItems: 'start', alignItems: 'baseline' }}>
         {rows.map((row, i) => {
           const ingredientNode = !row.ingredient ? '\u00a0' : row.diff?.wholeLine ? (
             <Box component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{row.ingredient}</Box>
@@ -551,11 +551,9 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           ) : row.ingredient;
           return (
             <Box key={i} sx={{ display: 'contents' }}>
-              {showAdjusted && (
-                <Typography component="div" sx={{ fontSize: 16, color: '#1565c0', fontWeight: 700, textAlign: 'left', whiteSpace: 'nowrap' }}>
-                  {row.scaled || '\u00a0'}
-                </Typography>
-              )}
+              <Typography component="div" sx={{ fontSize: 16, color: '#1565c0', fontWeight: 700, textAlign: 'left', whiteSpace: 'nowrap' }}>
+                {showAdjusted ? (row.scaled || '\u00a0') : '\u00a0'}
+              </Typography>
               <Typography component="div" sx={{ fontSize: 16, textAlign: 'left', whiteSpace: 'nowrap' }}>
                 {row.original || '\u00a0'}
               </Typography>
@@ -577,9 +575,10 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     const u = recipeImageSrc(raw);
     return u ?? null;
   };
+  const sharedImage = recipe.imageUrl || versions.find((v) => v.imageUrl)?.imageUrl || '';
   const displayImageUrl = isOwner && isEditing
-    ? (imagePreview ?? resolveImageUrl(editFields?.imageUrl ?? '') ?? null)
-    : resolveImageUrl(editFields?.imageUrl ?? selectedVersion?.imageUrl ?? '');
+    ? (imagePreview ?? resolveImageUrl(editFields?.imageUrl || sharedImage) ?? null)
+    : resolveImageUrl(sharedImage);
   const hasImageInEdit = !!(editFields?.imageUrl && String(editFields.imageUrl).trim());
   const showDiffs = highlightDiffs && versions.length > 1 && !(isOwner && isEditing);
   const parsedMultiplier = Number(multiplierInput);
@@ -589,52 +588,78 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   return (
     <Paper sx={{ p: 4, maxWidth: 900, mx: 'auto', width: '100%' }}>
       <Button variant="text" onClick={handleBack} sx={{ mb: 2 }}>&larr; {t('back')}</Button>
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 1 }}>
-        {versions.length > 1 && (
-          <Button
-            variant={highlightDiffs ? 'contained' : 'outlined'}
-            color={highlightDiffs ? 'error' : 'primary'}
-            sx={{ borderRadius: '4px !important', textTransform: 'none' }}
-            onClick={() => {
-              const next = !highlightDiffs;
-              setHighlightDiffs(next);
-              try { localStorage.setItem('recipeHighlightDiffs', next ? '1' : '0'); } catch { /* ignore */ }
-            }}
-          >
-            {highlightDiffs ? 'Unhighlight' : 'Highlight'}
-          </Button>
-        )}
-        {versions.map((v: Version, idx: number) => (
-          <Button
-            key={v.id || idx}
-            onClick={() => handleSelectVersion(idx)}
-            variant={idx === selectedVersionIdx ? 'contained' : 'outlined'}
-            sx={{ borderRadius: 999, textTransform: 'none' }}
-          >
-            {v.name ? v.name : (v.createdAt ? new Date(v.createdAt).toLocaleString() : `${t('version')} ${idx + 1}`)}
-          </Button>
-        ))}
-      </Box>
-      {isOwner && (
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 2 }}>
-          {!isEditing ? (
-            <Button variant="outlined" onClick={handleEdit} startIcon={<EditIcon />} sx={{ borderRadius: 2, textTransform: 'none' }}>{t('edit', 'Edit')}</Button>
-          ) : (
-            <Button variant="contained" color="primary" onClick={handleSave} startIcon={<SaveIcon />} sx={{ borderRadius: 2, textTransform: 'none' }}>{t('save', 'Save')}</Button>
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(180px, 280px)', gap: 3, alignItems: 'start', mb: 2 }}>
+        <Box>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 1 }}>
+            {versions.length > 1 && (
+              <Button
+                variant={highlightDiffs ? 'contained' : 'outlined'}
+                color={highlightDiffs ? 'error' : 'primary'}
+                sx={{ borderRadius: '4px !important', textTransform: 'none' }}
+                onClick={() => {
+                  const next = !highlightDiffs;
+                  setHighlightDiffs(next);
+                  try { localStorage.setItem('recipeHighlightDiffs', next ? '1' : '0'); } catch { /* ignore */ }
+                }}
+              >
+                {highlightDiffs ? 'Unhighlight' : 'Highlight'}
+              </Button>
+            )}
+            {versions.map((v: Version, idx: number) => (
+              <Button
+                key={v.id || idx}
+                onClick={() => handleSelectVersion(idx)}
+                variant={idx === selectedVersionIdx ? 'contained' : 'outlined'}
+                sx={{ borderRadius: 999, textTransform: 'none' }}
+              >
+                {v.name ? v.name : (v.createdAt ? new Date(v.createdAt).toLocaleString() : `${t('version')} ${idx + 1}`)}
+              </Button>
+            ))}
+          </Box>
+          {isOwner && (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+              {!isEditing ? (
+                <Button variant="outlined" onClick={handleEdit} startIcon={<EditIcon />} sx={{ borderRadius: 2, textTransform: 'none' }}>{t('edit', 'Edit')}</Button>
+              ) : (
+                <Button variant="contained" color="primary" onClick={handleSave} startIcon={<SaveIcon />} sx={{ borderRadius: 2, textTransform: 'none' }}>{t('save', 'Save')}</Button>
+              )}
+              <Button variant="outlined" onClick={() => { setRenameName(selectedVersion?.name || ''); setRenameError(null); setRenameOpen(true); }} disabled={!selectedVersion?.id} sx={{ borderRadius: 2, textTransform: 'none' }}>Rename</Button>
+              <Button variant="outlined" onClick={() => { setNewVariationName(''); setNewVariationOpen(true); }} sx={{ borderRadius: 2, textTransform: 'none' }}>New Variation</Button>
+              <Button variant="outlined" color="error" onClick={() => { setDeleteConfirmName(''); setDeleteError(null); setDeleteDialogOpen(true); }} disabled={deleting} startIcon={<DeleteIcon />} sx={{ borderRadius: 2, textTransform: 'none' }}>{t('delete')}</Button>
+              {recipe?.sourceUrl && !recipe.validated && (
+                <Button variant="outlined" onClick={handleValidate} disabled={validating} startIcon={validating ? <CircularProgress size={16} /> : <VerifiedIcon />} sx={{ borderRadius: 2, textTransform: 'none' }} title="Mark this imported recipe as a Secret Garden recipe. It will no longer update from the original source.">
+                  {validating ? 'Validating…' : t('validate', 'Validate')}
+                </Button>
+              )}
+            </Box>
           )}
-          <Button variant="outlined" onClick={() => { setRenameName(selectedVersion?.name || ''); setRenameError(null); setRenameOpen(true); }} disabled={!selectedVersion?.id} sx={{ borderRadius: 2, textTransform: 'none' }}>Rename</Button>
-          <Button variant="outlined" onClick={() => { setNewVariationName(''); setNewVariationOpen(true); }} sx={{ borderRadius: 2, textTransform: 'none' }}>New Variation</Button>
-          <Button variant="outlined" color="error" onClick={() => { setDeleteConfirmName(''); setDeleteError(null); setDeleteDialogOpen(true); }} disabled={deleting} startIcon={<DeleteIcon />} sx={{ borderRadius: 2, textTransform: 'none' }}>{t('delete')}</Button>
-          {recipe?.sourceUrl && !recipe.validated && (
-            <Button variant="outlined" onClick={handleValidate} disabled={validating} startIcon={validating ? <CircularProgress size={16} /> : <VerifiedIcon />} sx={{ borderRadius: 2, textTransform: 'none' }} title="Mark this imported recipe as a Secret Garden recipe. It will no longer update from the original source.">
-              {validating ? 'Validating…' : t('validate', 'Validate')}
-            </Button>
+          {isOwner && validateNotification && (
+            <Alert severity="error" sx={{ mt: 1 }} onClose={() => setValidateNotification(null)}>{validateNotification}</Alert>
           )}
         </Box>
-      )}
-      {isOwner && validateNotification && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setValidateNotification(null)}>{validateNotification}</Alert>
-      )}
+        <Box>
+          {isOwner && isEditing ? (
+            <>
+              <Typography variant="subtitle2" gutterBottom>Image</Typography>
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1, flexWrap: 'wrap' }}>
+                <Button variant="outlined" component="label" size="small">Upload<input type="file" accept="image/*" hidden onChange={handleImageUpload} /></Button>
+                {(displayImageUrl || hasImageInEdit) && (
+                  <Button variant="outlined" color="error" size="small" onClick={handleDeleteImage}>Delete</Button>
+                )}
+              </Box>
+              <TextField fullWidth size="small" label="Image URL" value={editFields?.imageUrl ?? ''} onChange={e => handleFieldChange('imageUrl', e.target.value)} placeholder="https://example.com/image.jpg" sx={{ mb: 1 }} />
+              {uploading && <Typography component="span">Uploading...</Typography>}
+              {displayImageUrl && (
+                <img src={displayImageUrl} alt={editFields?.title || recipe?.title || ''} style={{ width: '100%', maxHeight: 280, objectFit: 'contain' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+              )}
+            </>
+          ) : (
+            displayImageUrl && (
+              <img src={displayImageUrl} alt={recipe?.title || ''} style={{ width: '100%', maxHeight: 280, objectFit: 'contain' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            )
+          )}
+        </Box>
+      </Box>
       <Box>
         <Slide direction="down" in={hasUnsavedChanges} mountOnEnter unmountOnExit>
           <Alert severity="warning" action={<Button color="inherit" size="small" onClick={handleCancel}>Cancel</Button>} sx={{ mb: 2, position: 'sticky', top: 0, zIndex: 1000 }}>
@@ -652,30 +677,6 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           </Box>
         )}
       </Box>
-      {(displayImageUrl || (isOwner && isEditing)) && (
-        <Box mb={2}>
-          {isOwner && isEditing ? (
-            <>
-              <Typography variant="subtitle2" gutterBottom>Image (upload file or enter URL)</Typography>
-              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 1, flexWrap: 'wrap' }}>
-                <Button variant="outlined" component="label" size="small">Upload Image<input type="file" accept="image/*" hidden onChange={handleImageUpload} /></Button>
-                {(displayImageUrl || hasImageInEdit) && (
-                  <Button variant="outlined" color="error" size="small" onClick={handleDeleteImage}>Delete image</Button>
-                )}
-              </Box>
-              <TextField fullWidth size="small" label="Image URL" value={editFields?.imageUrl ?? ''} onChange={e => handleFieldChange('imageUrl', e.target.value)} placeholder="https://example.com/image.jpg" helperText="Enter a direct link to an image" sx={{ mb: 1 }} />
-              {uploading && <Typography sx={{ mt: 1 }} component="span">Uploading...</Typography>}
-              {displayImageUrl && (
-                <img src={displayImageUrl} alt={editFields?.title || recipe?.title || ''} style={{ maxWidth: 400, width: '100%', objectFit: 'contain' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-              )}
-            </>
-          ) : (
-            displayImageUrl && (
-              <img src={displayImageUrl} alt={editFields?.title || recipe?.title || ''} style={{ maxWidth: 400, width: '100%', objectFit: 'contain' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-            )
-          )}
-        </Box>
-      )}
       <Typography variant="subtitle1" color="text.secondary" gutterBottom>
         {isOwner && isEditing ? (
           <TextField value={editFields?.description || ''} onChange={e => handleFieldChange('description', e.target.value)} variant="standard" fullWidth multiline InputProps={{ disableUnderline: true, style: { fontSize: 18 } }} />
