@@ -63,6 +63,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   const [renameName, setRenameName] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
+  const [compareIdx, setCompareIdx] = useState<number | ''>('');
   const [averageRating, setAverageRating] = useState<number | null>(null);
   const [userRating, setUserRating] = useState<number | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -157,6 +158,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
 
   const handleSelectVersion = (idx: number) => {
     setSelectedVersionIdx(idx);
+    if (compareIdx === idx) setCompareIdx('');
     if (!recipe) return;
     const ver = versions[idx];
     setEditFields({ ...ver, title: recipe.title, description: recipe.description, imageUrl: ver?.imageUrl ?? recipe.imageUrl ?? '' });
@@ -408,6 +410,24 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     }
   };
 
+  const renderDiffLines = (current: string | undefined, other: string | undefined) => {
+    const otherLines = new Set(
+      String(other ?? '').replace(/\r\n/g, '\n').split('\n').map((line) => line.trim()).filter(Boolean)
+    );
+    return (
+      <>
+        {String(current ?? '').replace(/\r\n/g, '\n').split('\n').map((line, i) => {
+          const changed = line.trim().length > 0 && !otherLines.has(line.trim());
+          return (
+            <Typography key={i} component="div" sx={{ fontSize: 16, whiteSpace: 'pre-wrap', minHeight: '1.4em', color: changed ? '#c62828' : 'inherit', fontWeight: changed ? 600 : 400 }}>
+              {line || '\u00a0'}
+            </Typography>
+          );
+        })}
+      </>
+    );
+  };
+
   if (loading) return <Typography>{t('loadingRecipe')}</Typography>;
   if (error) return <Typography color="error">{t('error')}: {error}</Typography>;
   if (!recipe) return <Typography>{t('recipeNotFound')}</Typography>;
@@ -420,6 +440,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     ? (imagePreview ?? resolveImageUrl(editFields?.imageUrl ?? '') ?? null)
     : resolveImageUrl(editFields?.imageUrl ?? selectedVersion?.imageUrl ?? '');
   const hasImageInEdit = !!(editFields?.imageUrl && String(editFields.imageUrl).trim());
+  const compareVersion = compareIdx === '' || Number(compareIdx) === selectedVersionIdx ? null : versions[Number(compareIdx)] ?? null;
 
   return (
     <Paper sx={{ p: 4, maxWidth: 900, mx: 'auto', width: '100%' }}>
@@ -512,9 +533,16 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
         </Box>
       </Box>
       <Typography variant="h6" mt={2}>{t('ingredients')}</Typography>
+      {compareVersion && !isEditing && (
+        <Typography variant="body2" sx={{ color: '#c62828', mb: 0.5 }}>
+          Red lines are not in {variationLabelOf(compareVersion, Number(compareIdx))}.
+        </Typography>
+      )}
       <Box sx={{ background: '#f5f5f5', p: 2, borderRadius: 1, overflowX: 'auto', '& p': { margin: '0.25em 0' }, '& ul, & ol': { margin: '0.25em 0', pl: 2 } }}>
         {isOwner && isEditing ? (
           <TextField value={editFields?.ingredients || ''} onChange={e => handleFieldChange('ingredients', e.target.value)} variant="standard" fullWidth multiline minRows={4} placeholder="One per line or use markdown." InputProps={{ disableUnderline: true, style: { fontFamily: 'inherit', fontSize: 16 } }} />
+        ) : compareVersion ? (
+          renderDiffLines(editFields?.ingredients ?? selectedVersion?.ingredients, compareVersion.ingredients)
         ) : (
           renderMarkdownWithBlankLines(editFields?.ingredients ?? selectedVersion?.ingredients ?? '')
         )}
@@ -523,6 +551,8 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       <Box sx={{ background: '#f5f5f5', p: 2, borderRadius: 1, '& p': { margin: '0.25em 0' }, '& ul, & ol': { margin: '0.25em 0', pl: 2 } }}>
         {isOwner && isEditing ? (
           <TextField value={editFields?.instructions || ''} onChange={e => handleFieldChange('instructions', e.target.value)} variant="standard" fullWidth multiline minRows={6} placeholder="One step per line or use markdown." InputProps={{ disableUnderline: true, style: { fontFamily: 'inherit', fontSize: 16 } }} />
+        ) : compareVersion ? (
+          renderDiffLines(editFields?.instructions ?? selectedVersion?.instructions, compareVersion.instructions)
         ) : (
           renderMarkdownWithBlankLines(editFields?.instructions ?? selectedVersion?.instructions ?? '')
         )}
@@ -560,6 +590,22 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
               ))}
             </List>
           </Box>
+          {versions.length > 1 && (
+            <TextField
+              select
+              size="small"
+              label="Highlight differences from"
+              value={compareVersion ? compareIdx : ''}
+              onChange={(e) => setCompareIdx(e.target.value === '' ? '' : Number(e.target.value))}
+              SelectProps={{ native: true }}
+              sx={{ mt: 1, minWidth: 280 }}
+            >
+              <option value="">Don't highlight</option>
+              {versions.map((v: Version, idx: number) => (
+                idx === selectedVersionIdx ? null : <option key={v.id || idx} value={idx}>{variationLabelOf(v, idx)}</option>
+              ))}
+            </TextField>
+          )}
         </Box>
       )}
       {isOwner && (
