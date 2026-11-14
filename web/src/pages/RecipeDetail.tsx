@@ -407,62 +407,64 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
 
   const wordKey = (word: string) => word.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
 
-  const wordsInLine = (line: string) => {
-    const keys = new Set<string>();
-    line.split(/\s+/).forEach((word) => {
-      const key = wordKey(word);
-      if (key) keys.add(key);
-    });
-    return keys;
-  };
+  const textPieces = (text: string) => text.match(/\s+|[^\p{L}\p{N}\s]+|[\p{L}\p{N}]+/gu) ?? [];
 
-  const wordsSharedWithEveryOther = (line: string, otherTexts: string[]) => {
-    const mine = wordsInLine(line);
-    if (mine.size === 0) return { wholeLine: false, shared: mine };
-    let shared = new Set(mine);
-    let wholeLine = false;
+  const sharedAcrossVariations = (otherTexts: string[]) => {
+    let words: Set<string> | null = null;
+    let punct: Set<string> | null = null;
     otherTexts.forEach((text) => {
-      const otherLines = String(text ?? '').replace(/\r\n/g, '\n').split('\n');
-      let best = new Set<string>();
-      let bestScore = 0;
-      otherLines.forEach((otherLine) => {
-        const otherWords = wordsInLine(otherLine);
-        let score = 0;
-        mine.forEach((word) => { if (otherWords.has(word)) score += 1; });
-        if (score > bestScore) {
-          bestScore = score;
-          best = otherWords;
+      const wordSet = new Set<string>();
+      const punctSet = new Set<string>();
+      textPieces(String(text ?? '')).forEach((piece) => {
+        if (/^\s+$/.test(piece)) return;
+        if (/^[^\p{L}\p{N}]+$/u.test(piece)) {
+          piece.split('').forEach((ch) => punctSet.add(ch));
+          return;
         }
+        const key = wordKey(piece);
+        if (key) wordSet.add(key);
       });
-      // Less than half the words match: this line is not in that variation.
-      if (bestScore / mine.size < 0.5) wholeLine = true;
-      const next = new Set<string>();
-      shared.forEach((word) => { if (best.has(word)) next.add(word); });
-      shared = next;
+      words = words ? new Set([...words].filter((w) => wordSet.has(w))) : wordSet;
+      punct = punct ? new Set([...punct].filter((ch) => punctSet.has(ch))) : punctSet;
     });
-    return { wholeLine, shared };
+    return { words: words ?? new Set<string>(), punct: punct ?? new Set<string>() };
   };
 
-  const renderDiffLines = (current: string | undefined, otherTexts: string[]) => (
+  const renderDiffText = (text: string, shared: { words: Set<string>; punct: Set<string> }) => (
     <>
-      {String(current ?? '').replace(/\r\n/g, '\n').split('\n').map((line, i) => {
-        const { wholeLine, shared } = wordsSharedWithEveryOther(line, otherTexts);
-        const parts = line.split(/(\s+)/);
-        return (
-          <Typography key={i} component="div" sx={{ fontSize: 16, whiteSpace: 'pre-wrap', minHeight: '1.4em', color: wholeLine ? '#c62828' : 'inherit', fontWeight: wholeLine ? 700 : 400 }}>
-            {line ? parts.map((part, j) => {
-              if (wholeLine) return <span key={j}>{part}</span>;
-              const key = wordKey(part);
-              const changed = !!key && !shared.has(key);
-              return changed
-                ? <Box key={j} component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{part}</Box>
-                : <span key={j}>{part}</span>;
-            }) : '\u00a0'}
-          </Typography>
-        );
+      {textPieces(text).map((piece, i) => {
+        if (/^\s+$/.test(piece)) return <span key={i}>{piece}</span>;
+        if (/^[^\p{L}\p{N}]+$/u.test(piece)) {
+          return (
+            <span key={i}>
+              {piece.split('').map((ch, j) => (
+                shared.punct.has(ch)
+                  ? <span key={j}>{ch}</span>
+                  : <Box key={j} component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{ch}</Box>
+              ))}
+            </span>
+          );
+        }
+        const changed = !shared.words.has(wordKey(piece));
+        return changed
+          ? <Box key={i} component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{piece}</Box>
+          : <span key={i}>{piece}</span>;
       })}
     </>
   );
+
+  const renderDiffLines = (current: string | undefined, otherTexts: string[]) => {
+    const shared = sharedAcrossVariations(otherTexts);
+    return (
+      <>
+        {String(current ?? '').replace(/\r\n/g, '\n').split('\n').map((line, i) => (
+          <Typography key={i} component="div" sx={{ fontSize: 16, whiteSpace: 'pre-wrap', minHeight: '1.4em' }}>
+            {line ? renderDiffText(line, shared) : '\u00a0'}
+          </Typography>
+        ))}
+      </>
+    );
+  };
 
   const parseQtyToken = (token: string) => {
     const unicode: Record<string, number> = { '½': 1 / 2, '⅓': 1 / 3, '⅔': 2 / 3, '¼': 1 / 4, '¾': 3 / 4, '⅛': 1 / 8, '⅜': 3 / 8, '⅝': 5 / 8, '⅞': 7 / 8 };
@@ -536,8 +538,9 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     };
     const splitLines = String(current ?? '').replace(/\r\n/g, '\n').split('\n');
     const sourceLines = splitLines.length === 1 && splitLines[0] === '' ? [] : splitLines;
-    const rows = sourceLines.map((raw) => ({ ...parseLine(raw), diff: otherTexts ? wordsSharedWithEveryOther(raw, otherTexts) : null }));
-    if (editing) rows.push({ original: '', scaled: '', ingredient: '', diff: null });
+    const ingredientShared = otherTexts ? sharedAcrossVariations(otherTexts) : null;
+    const rows = sourceLines.map((raw) => ({ ...parseLine(raw), raw }));
+    if (editing) rows.push({ original: '', scaled: '', ingredient: '', raw: '' });
 
     const writeRow = (index: number, field: 'original' | 'ingredient', value: string) => {
       const next = sourceLines.slice();
@@ -573,16 +576,8 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
               placeholder={i === rows.length - 1 ? 'Ingredient' : ''}
               style={{ ...fieldStyle(row.ingredient || 'Ingredient'), width: '100%' }}
             />
-          ) : !row.ingredient ? '\u00a0' : row.diff?.wholeLine ? (
-            <Box component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{row.ingredient}</Box>
-          ) : row.diff ? (
-            row.ingredient.split(/(\s+)/).map((part, k) => {
-              const key = wordKey(part);
-              const changed = !!key && !row.diff!.shared.has(key);
-              return changed
-                ? <Box key={k} component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{part}</Box>
-                : <span key={k}>{part}</span>;
-            })
+          ) : !row.ingredient ? '\u00a0' : ingredientShared ? (
+            renderDiffText(row.ingredient, ingredientShared)
           ) : row.ingredient;
           return (
             <Box key={i} sx={{ display: 'contents' }}>
