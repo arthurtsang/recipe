@@ -76,9 +76,11 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   const [removingSource, setRemovingSource] = useState(false);
   const [validating, setValidating] = useState(false);
   const [validateNotification, setValidateNotification] = useState<string | null>(null);
+  const [multiplierInput, setMultiplierInput] = useState('1');
 
   useEffect(() => {
     if (!id) return;
+    setMultiplierInput('1');
     setLoading(true);
     fetch(`/api/recipes/${id}`)
       .then(res => {
@@ -488,6 +490,110 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     </>
   );
 
+  const parseQtyToken = (token: string) => {
+    const unicode: Record<string, number> = { '½': 1 / 2, '⅓': 1 / 3, '⅔': 2 / 3, '¼': 1 / 4, '¾': 3 / 4, '⅛': 1 / 8, '⅜': 3 / 8, '⅝': 5 / 8, '⅞': 7 / 8 };
+    const t = token.trim();
+    if (unicode[t] != null) return unicode[t];
+    const mixed = t.match(/^(\d+)\s+(\d+)\/(\d+)$/);
+    if (mixed) {
+      const den = Number(mixed[3]);
+      return den ? Number(mixed[1]) + Number(mixed[2]) / den : null;
+    }
+    const frac = t.match(/^(\d+)\/(\d+)$/);
+    if (frac) {
+      const den = Number(frac[2]);
+      return den ? Number(frac[1]) / den : null;
+    }
+    const n = Number(t.replace(',', '.'));
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const formatQty = (n: number) => {
+    if (!Number.isFinite(n)) return '';
+    const nearest = Math.round(n);
+    if (Math.abs(n - nearest) < 0.001) return String(nearest);
+    const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
+    for (let den = 2; den <= 16; den += 1) {
+      const num = Math.round(n * den);
+      if (Math.abs(n - num / den) < 0.02) {
+        const whole = Math.trunc(num / den);
+        const rem = Math.abs(num % den);
+        if (rem === 0) return String(whole);
+        const g = gcd(rem, den);
+        const frac = `${rem / g}/${den / g}`;
+        return whole > 0 ? `${whole} ${frac}` : frac;
+      }
+    }
+    return String(Math.round(n * 100) / 100);
+  };
+
+  const shouldScaleQty = (line: string, index: number, token: string) => {
+    const before = line.slice(0, index);
+    const after = line.slice(index + token.length);
+    if (/[A-Za-z0-9/]$/.test(before)) return false;
+    if (/[x×]\s*$/i.test(before)) return false;
+    if (/^\s*$/.test(before) && /^\s*[.)]/.test(after)) return false;
+    const rest = after.trimStart();
+    if (/^(?:inch(?:es)?|°|degrees?|minutes?|hours?|seconds?)\b/i.test(rest)) return false;
+    if (/^°/.test(rest)) return false;
+    if (/^\s*x\s*\d/i.test(after)) return false;
+    return true;
+  };
+
+  const renderScaledIngredients = (current: string | undefined, otherTexts: string[] | null, multiplier: number) => {
+    const qtyRe = /(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:[.,]\d+)?|[½⅓⅔¼¾⅛⅜⅝⅞])/g;
+    return (
+      <>
+        {String(current ?? '').replace(/\r\n/g, '\n').split('\n').map((line, i) => {
+          const diff = otherTexts ? wordsSharedWithEveryOther(line, otherTexts) : null;
+          const chunks: { text: string; qty: boolean }[] = [];
+          let last = 0;
+          qtyRe.lastIndex = 0;
+          let match: RegExpExecArray | null;
+          while ((match = qtyRe.exec(line))) {
+            if (!shouldScaleQty(line, match.index, match[0])) continue;
+            if (match.index > last) chunks.push({ text: line.slice(last, match.index), qty: false });
+            chunks.push({ text: match[0], qty: true });
+            last = match.index + match[0].length;
+          }
+          if (last < line.length) chunks.push({ text: line.slice(last), qty: false });
+          if (chunks.length === 0) chunks.push({ text: line, qty: false });
+          return (
+            <Typography key={i} component="div" sx={{ fontSize: 16, whiteSpace: 'pre-wrap', minHeight: '1.4em' }}>
+              {line ? chunks.map((chunk, j) => {
+                if (chunk.qty) {
+                  const value = parseQtyToken(chunk.text);
+                  const scaled = value == null ? '' : formatQty(value * multiplier);
+                  return (
+                    <span key={j}>
+                      <span>{chunk.text}</span>
+                      {scaled && (
+                        <Box component="span" sx={{ color: '#1565c0', fontWeight: 700 }}>{` ${scaled}`}</Box>
+                      )}
+                    </span>
+                  );
+                }
+                if (diff?.wholeLine) return <Box key={j} component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{chunk.text}</Box>;
+                if (!diff) return <span key={j}>{chunk.text}</span>;
+                return (
+                  <span key={j}>
+                    {chunk.text.split(/(\s+)/).map((part, k) => {
+                      const key = wordKey(part);
+                      const changed = !!key && !diff.shared.has(key);
+                      return changed
+                        ? <Box key={k} component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{part}</Box>
+                        : <span key={k}>{part}</span>;
+                    })}
+                  </span>
+                );
+              }) : '\u00a0'}
+            </Typography>
+          );
+        })}
+      </>
+    );
+  };
+
   if (loading) return <Typography>{t('loadingRecipe')}</Typography>;
   if (error) return <Typography color="error">{t('error')}: {error}</Typography>;
   if (!recipe) return <Typography>{t('recipeNotFound')}</Typography>;
@@ -501,6 +607,9 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     : resolveImageUrl(editFields?.imageUrl ?? selectedVersion?.imageUrl ?? '');
   const hasImageInEdit = !!(editFields?.imageUrl && String(editFields.imageUrl).trim());
   const showDiffs = highlightDiffs && versions.length > 1 && !(isOwner && isEditing);
+  const parsedMultiplier = Number(multiplierInput);
+  const multiplier = Number.isFinite(parsedMultiplier) && parsedMultiplier > 0 ? parsedMultiplier : 1;
+  const scaleIngredients = !(isOwner && isEditing) && Math.abs(multiplier - 1) > 0.0001;
 
   return (
     <Paper sx={{ p: 4, maxWidth: 900, mx: 'auto', width: '100%' }}>
@@ -521,6 +630,17 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
             )}
           </Box>
         )}
+      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+        <TextField
+          size="small"
+          label="Multiply"
+          type="number"
+          value={multiplierInput}
+          onChange={(e) => setMultiplierInput(e.target.value)}
+          inputProps={{ step: 'any', min: 0 }}
+          sx={{ width: 140 }}
+        />
       </Box>
       {(displayImageUrl || (isOwner && isEditing)) && (
         <Box mb={2}>
@@ -596,6 +716,12 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       <Box sx={{ background: '#f5f5f5', p: 2, borderRadius: 1, overflowX: 'auto', '& p': { margin: '0.25em 0' }, '& ul, & ol': { margin: '0.25em 0', pl: 2 } }}>
         {isOwner && isEditing ? (
           <TextField value={editFields?.ingredients || ''} onChange={e => handleFieldChange('ingredients', e.target.value)} variant="standard" fullWidth multiline minRows={4} placeholder="One per line or use markdown." InputProps={{ disableUnderline: true, style: { fontFamily: 'inherit', fontSize: 16 } }} />
+        ) : scaleIngredients ? (
+          renderScaledIngredients(
+            editFields?.ingredients ?? selectedVersion?.ingredients,
+            showDiffs ? versions.filter((_, idx) => idx !== selectedVersionIdx).map((v) => v.ingredients || '') : null,
+            multiplier
+          )
         ) : showDiffs ? (
           renderDiffLines(editFields?.ingredients ?? selectedVersion?.ingredients, versions.filter((_, idx) => idx !== selectedVersionIdx).map((v) => v.ingredients || ''))
         ) : (
