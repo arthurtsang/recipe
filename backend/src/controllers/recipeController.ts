@@ -601,6 +601,25 @@ export async function deleteRecipe(req: Request, res: Response) {
   }
 }
 
+export async function clearRecipeSource(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    if (!req.oidc?.user?.email) return res.status(401).json({ error: 'Not authenticated' });
+    const dbUser = await prisma.user.findUnique({ where: { email: req.oidc.user.email.toLowerCase() } });
+    if (!dbUser) return res.status(401).json({ error: 'User not found' });
+
+    const recipe = await prisma.recipe.findUnique({ where: { id } });
+    if (!recipe) return res.status(404).json({ error: 'Recipe not found' });
+    if (recipe.userId !== dbUser.id) return res.status(403).json({ error: 'Not authorized to change this recipe' });
+
+    await prisma.recipe.update({ where: { id }, data: { sourceUrl: null } });
+    res.json({ sourceUrl: null });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to remove source' });
+  }
+}
+
 export async function renameRecipeVersion(req: Request, res: Response) {
   try {
     const { id, versionId } = req.params;

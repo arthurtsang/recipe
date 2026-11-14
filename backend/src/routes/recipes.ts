@@ -32,6 +32,7 @@ router.post('/', requiresEnabledUser(), requireRecipeContent, recipeController.c
 router.post('/upload', requiresEnabledUser(), uploadImage, uploadImageHandler);
 router.put('/:id', requiresEnabledUser(), requireRecipeContent, recipeController.updateRecipe);
 router.post('/:id/validate', requiresEnabledUser(), validateRecipe);
+router.delete('/:id/source', requiresEnabledUser(), recipeController.clearRecipeSource);
 router.delete('/:id', requiresEnabledUser(), recipeController.deleteRecipe);
 router.delete('/:id/versions/:versionId', requiresEnabledUser(), recipeController.deleteRecipeVersion);
 router.patch('/:id/versions/:versionId', requiresEnabledUser(), recipeController.renameRecipeVersion);

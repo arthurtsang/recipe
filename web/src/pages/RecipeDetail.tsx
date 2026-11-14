@@ -73,6 +73,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   const [originalFields, setOriginalFields] = useState<Version | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [removingSource, setRemovingSource] = useState(false);
   const [validating, setValidating] = useState(false);
   const [validateNotification, setValidateNotification] = useState<string | null>(null);
 
@@ -297,6 +298,23 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       setAverageRating(data.average);
       setUserRating(data.user);
     });
+  };
+
+  const handleRemoveSource = async () => {
+    if (!id || !recipe?.sourceUrl) return;
+    setRemovingSource(true);
+    try {
+      const res = await fetch(`/api/recipes/${id}/source`, { method: 'DELETE', credentials: 'include' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Failed to remove source');
+      }
+      setRecipe((prev) => (prev ? { ...prev, sourceUrl: '' } : prev));
+    } catch (err: unknown) {
+      setValidateNotification(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRemovingSource(false);
+    }
   };
 
   const handleValidate = async () => {
@@ -603,11 +621,16 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           recipe.user?.alias || recipe.user?.name || recipe.user?.email
         )}
         {recipe.sourceUrl && (
-          <Box sx={{ mt: 1 }}>
+          <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
             <Typography variant="body2" component="span" color="text.secondary">Source: {' '}</Typography>
             <Link href={recipe.sourceUrl} target="_blank" rel="noopener noreferrer" sx={{ color: 'primary.main', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
               {recipe.sourceUrl}
             </Link>
+            {isOwner && (
+              <Button size="small" color="error" disabled={removingSource} onClick={handleRemoveSource}>
+                {removingSource ? 'Removing…' : 'Remove source'}
+              </Button>
+            )}
           </Box>
         )}
       </Box>
