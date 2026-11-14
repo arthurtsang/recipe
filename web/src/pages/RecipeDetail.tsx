@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
-import { Paper, Typography, Box, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemButton, ListItemText, Checkbox, Rating, Alert, Slide, Link, CircularProgress, Chip } from '@mui/material';
+import { Paper, Typography, Box, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Checkbox, Rating, Alert, Slide, Link, CircularProgress, Chip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
@@ -622,37 +622,51 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   return (
     <Paper sx={{ p: 4, maxWidth: 900, mx: 'auto', width: '100%' }}>
       <Button variant="text" onClick={handleBack} sx={{ mb: 2 }}>&larr; {t('back')}</Button>
-      {versions.length > 0 && (
-        <Box mb={2} sx={{ position: 'relative' }}>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            {versions.length > 1 ? t('versions') : t('version')} ({versions.length}):
-          </Typography>
-          <Box sx={{ position: 'relative', overflowX: 'auto', maxWidth: '100%' }}>
-            <List dense sx={{ display: 'flex', flexDirection: 'row', gap: 1, p: 0, minHeight: 48 }}>
-              {versions.map((v: Version, idx: number) => (
-                <ListItem key={v.id || idx} disablePadding sx={{ width: 'auto', minWidth: 120 }}>
-                  <ListItemButton selected={idx === selectedVersionIdx} onClick={() => handleSelectVersion(idx)}>
-                    <ListItemText primary={v.name ? v.name : (v.createdAt ? new Date(v.createdAt).toLocaleString() : `${t('version')} ${idx + 1}`)} />
-                  </ListItemButton>
-                </ListItem>
-              ))}
-            </List>
-          </Box>
-          {versions.length > 1 && (
-            <Button
-              sx={{ mt: 1 }}
-              variant={highlightDiffs ? 'contained' : 'outlined'}
-              color={highlightDiffs ? 'error' : 'primary'}
-              onClick={() => {
-                const next = !highlightDiffs;
-                setHighlightDiffs(next);
-                try { localStorage.setItem('recipeHighlightDiffs', next ? '1' : '0'); } catch { /* ignore */ }
-              }}
-            >
-              {highlightDiffs ? 'Differences highlighted' : 'Highlight differences'}
-            </Button>
-          )}
-        </Box>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 2 }}>
+        {versions.length > 1 && (
+          <Button
+            variant={highlightDiffs ? 'contained' : 'outlined'}
+            color={highlightDiffs ? 'error' : 'primary'}
+            sx={{ borderRadius: 999, textTransform: 'none' }}
+            onClick={() => {
+              const next = !highlightDiffs;
+              setHighlightDiffs(next);
+              try { localStorage.setItem('recipeHighlightDiffs', next ? '1' : '0'); } catch { /* ignore */ }
+            }}
+          >
+            {highlightDiffs ? 'Variations highlighted' : 'Highlight variations'}
+          </Button>
+        )}
+        {versions.map((v: Version, idx: number) => (
+          <Button
+            key={v.id || idx}
+            onClick={() => handleSelectVersion(idx)}
+            variant={idx === selectedVersionIdx ? 'contained' : 'outlined'}
+            sx={{ borderRadius: 999, textTransform: 'none' }}
+          >
+            {v.name ? v.name : (v.createdAt ? new Date(v.createdAt).toLocaleString() : `${t('version')} ${idx + 1}`)}
+          </Button>
+        ))}
+        {isOwner && (
+          <>
+            {!isEditing ? (
+              <Button variant="outlined" onClick={handleEdit} startIcon={<EditIcon />} sx={{ borderRadius: 999, textTransform: 'none' }}>{t('edit', 'Edit')}</Button>
+            ) : (
+              <Button variant="contained" color="primary" onClick={handleSave} startIcon={<SaveIcon />} sx={{ borderRadius: 999, textTransform: 'none' }}>{t('save', 'Save')}</Button>
+            )}
+            <Button variant="outlined" onClick={() => { setNewVariationName(''); setNewVariationOpen(true); }} sx={{ borderRadius: 999, textTransform: 'none' }}>New Variation</Button>
+            <Button variant="outlined" onClick={() => { setRenameName(selectedVersion?.name || ''); setRenameError(null); setRenameOpen(true); }} disabled={!selectedVersion?.id} sx={{ borderRadius: 999, textTransform: 'none' }}>Rename</Button>
+            {recipe?.sourceUrl && !recipe.validated && (
+              <Button variant="outlined" onClick={handleValidate} disabled={validating} startIcon={validating ? <CircularProgress size={16} /> : <VerifiedIcon />} sx={{ borderRadius: 999, textTransform: 'none' }} title="Mark this imported recipe as a Secret Garden recipe. It will no longer update from the original source.">
+                {validating ? 'Validating…' : t('validate', 'Validate')}
+              </Button>
+            )}
+            <Button variant="outlined" color="error" onClick={() => { setDeleteConfirmName(''); setDeleteError(null); setDeleteDialogOpen(true); }} disabled={deleting} startIcon={<DeleteIcon />} sx={{ borderRadius: 999, textTransform: 'none' }}>{t('delete')}</Button>
+          </>
+        )}
+      </Box>
+      {isOwner && validateNotification && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setValidateNotification(null)}>{validateNotification}</Alert>
       )}
       <Box>
         <Slide direction="down" in={hasUnsavedChanges} mountOnEnter unmountOnExit>
@@ -800,28 +814,6 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           </Box>
         )}
       </Box>
-      {isOwner && (
-        <Box mt={3}>
-          {validateNotification && (
-            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setValidateNotification(null)}>{validateNotification}</Alert>
-          )}
-          <Box display="flex" gap={2} flexWrap="wrap">
-            {!isEditing ? (
-              <Button variant="contained" color="primary" onClick={handleEdit} startIcon={<EditIcon />}>{t('edit', 'Edit')}</Button>
-            ) : (
-              <Button variant="contained" color="primary" onClick={handleSave} startIcon={<SaveIcon />}>{t('save', 'Save')}</Button>
-            )}
-            <Button variant="outlined" onClick={() => { setNewVariationName(''); setNewVariationOpen(true); }}>New Variation</Button>
-            <Button variant="outlined" onClick={() => { setRenameName(selectedVersion?.name || ''); setRenameError(null); setRenameOpen(true); }} disabled={!selectedVersion?.id}>Rename</Button>
-            {recipe?.sourceUrl && !recipe.validated && (
-              <Button variant="outlined" size="medium" onClick={handleValidate} disabled={validating} startIcon={validating ? <CircularProgress size={16} /> : <VerifiedIcon />} title="Mark this imported recipe as a Secret Garden recipe. It will no longer update from the original source.">
-                {validating ? 'Validating…' : t('validate', 'Validate')}
-              </Button>
-            )}
-            <Button variant="outlined" color="error" onClick={() => { setDeleteConfirmName(''); setDeleteError(null); setDeleteDialogOpen(true); }} disabled={deleting} startIcon={<DeleteIcon />}>{t('delete')}</Button>
-          </Box>
-        </Box>
-      )}
       <Dialog open={renameOpen} onClose={() => { if (!renaming) setRenameOpen(false); }}>
         <DialogTitle>Rename variation</DialogTitle>
         <DialogContent>
