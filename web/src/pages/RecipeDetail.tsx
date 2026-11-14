@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
-import { Paper, Typography, Box, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Checkbox, Rating, Alert, Slide, Link, CircularProgress, Chip } from '@mui/material';
+import { Paper, Typography, Box, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Checkbox, Alert, Slide, Link, CircularProgress, Chip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
@@ -66,8 +66,6 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   const [highlightDiffs, setHighlightDiffs] = useState(() => {
     try { return localStorage.getItem('recipeHighlightDiffs') === '1'; } catch { return false; }
   });
-  const [averageRating, setAverageRating] = useState<number | null>(null);
-  const [userRating, setUserRating] = useState<number | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [originalFields, setOriginalFields] = useState<Version | null>(null);
@@ -105,16 +103,6 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoading(false));
   }, [id]);
-
-  useEffect(() => {
-    if (!id) return;
-    fetch(`/api/recipes/${id}/ratings`, { credentials: 'include' })
-      .then(res => res.json())
-      .then(data => {
-        setAverageRating(data.average);
-        setUserRating(data.user);
-      });
-  }, [id, user]);
 
   const handleBack = () => navigate(-1);
   const isOwner = !!(user && recipe && recipe.user && user.id === recipe.user.id);
@@ -286,20 +274,6 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     setImagePreview(null);
     setIsEditing(false);
     setHasUnsavedChanges(false);
-  };
-
-  const handleRatingChange = async (_event: any, newValue: number | null) => {
-    if (!newValue) return;
-    setUserRating(newValue);
-    await fetch(`/api/recipes/${id}/ratings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ value: newValue }),
-    }).then(res => res.json()).then(data => {
-      setAverageRating(data.average);
-      setUserRating(data.user);
-    });
   };
 
   const handleRemoveSource = async () => {
@@ -540,65 +514,58 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     return true;
   };
 
-  const renderScaledIngredients = (current: string | undefined, otherTexts: string[] | null, multiplier: number) => {
+  const renderIngredientColumns = (current: string | undefined, otherTexts: string[] | null, multiplier: number, showAdjusted: boolean) => {
     const qtyRe = /(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:[.,]\d+)?|[½⅓⅔¼¾⅛⅜⅝⅞])/g;
+    const unitRe = /^(?:cups?|c|tbsps?|tablespoons?|tbs|tsps?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|l|liters?|litres?|pinch(?:es)?|cloves?|cans?|packages?|pkg|slices?|pieces?|bunch(?:es)?|sprigs?|heads?|stalks?|sheets?|sticks?|dash(?:es)?|handfuls?|quarts?|pints?|gallons?)$/i;
+    const rows = String(current ?? '').replace(/\r\n/g, '\n').split('\n').map((raw) => {
+      const line = raw.replace(/^\s*[-*+]\s+/, '');
+      const diff = otherTexts ? wordsSharedWithEveryOther(raw, otherTexts) : null;
+      qtyRe.lastIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = qtyRe.exec(line))) {
+        if (!shouldScaleQty(line, match.index, match[0])) continue;
+        if (line.slice(0, match.index).trim()) break;
+        const after = line.slice(match.index + match[0].length);
+        const unitMatch = after.match(/^\s*([A-Za-z][A-Za-z.]*)/);
+        const unit = unitMatch && unitRe.test(unitMatch[1]) ? unitMatch[1] : '';
+        const ingredient = (unit ? after.slice(after.indexOf(unit) + unit.length) : after).replace(/^\s+/, '');
+        const value = parseQtyToken(match[0]);
+        const scaled = value == null ? '' : `${formatQty(value * multiplier)}${unit ? ` ${unit}` : ''}`;
+        return { original: unit ? `${match[0]} ${unit}` : match[0], scaled, ingredient, diff, raw };
+      }
+      return { original: '', scaled: '', ingredient: line.trim(), diff, raw };
+    });
     return (
-      <>
-        {String(current ?? '').replace(/\r\n/g, '\n').split('\n').map((line, i) => {
-          const diff = otherTexts ? wordsSharedWithEveryOther(line, otherTexts) : null;
-          const chunks: { text: string; qty: boolean }[] = [];
-          let last = 0;
-          qtyRe.lastIndex = 0;
-          let match: RegExpExecArray | null;
-          while ((match = qtyRe.exec(line))) {
-            if (!shouldScaleQty(line, match.index, match[0])) continue;
-            if (match.index > last) chunks.push({ text: line.slice(last, match.index), qty: false });
-            chunks.push({ text: match[0], qty: true });
-            last = match.index + match[0].length;
-          }
-          if (last < line.length) chunks.push({ text: line.slice(last), qty: false });
-          if (chunks.length === 0) chunks.push({ text: line, qty: false });
-          const scaledBits: string[] = [];
-          chunks.forEach((chunk, j) => {
-            if (!chunk.qty) return;
-            const value = parseQtyToken(chunk.text);
-            const scaled = value == null ? '' : formatQty(value * multiplier);
-            if (!scaled) return;
-            const next = chunks[j + 1]?.text ?? '';
-            const unitMatch = next.match(/^\s*([A-Za-z][A-Za-z.]*)/);
-            const unit = unitMatch && /^(?:cups?|c|tbsps?|tablespoons?|tbs|tsps?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|l|liters?|litres?|pinch(?:es)?|cloves?|cans?|packages?|pkg|slices?|pieces?|bunch(?:es)?|sprigs?|heads?|stalks?|sheets?|sticks?|dash(?:es)?|handfuls?|quarts?|pints?|gallons?)$/i.test(unitMatch[1])
-              ? unitMatch[1]
-              : '';
-            scaledBits.push(unit ? `${scaled} ${unit}` : scaled);
-          });
+      <Box sx={{ display: 'grid', gridTemplateColumns: showAdjusted ? 'max-content max-content minmax(0, 1fr)' : 'max-content minmax(0, 1fr)', columnGap: 3, rowGap: 0.5, justifyItems: 'start', alignItems: 'baseline' }}>
+        {rows.map((row, i) => {
+          const ingredientNode = !row.ingredient ? '\u00a0' : row.diff?.wholeLine ? (
+            <Box component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{row.ingredient}</Box>
+          ) : row.diff ? (
+            row.ingredient.split(/(\s+)/).map((part, k) => {
+              const key = wordKey(part);
+              const changed = !!key && !row.diff!.shared.has(key);
+              return changed
+                ? <Box key={k} component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{part}</Box>
+                : <span key={k}>{part}</span>;
+            })
+          ) : row.ingredient;
           return (
-            <Box key={i} sx={{ display: 'flex', alignItems: 'baseline', gap: 2, minHeight: '1.4em' }}>
-              <Typography component="div" sx={{ fontSize: 16, whiteSpace: 'pre-wrap', flex: '1 1 auto' }}>
-                {line ? chunks.map((chunk, j) => {
-                  if (diff?.wholeLine && !chunk.qty) return <Box key={j} component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{chunk.text}</Box>;
-                  if (!diff || chunk.qty || diff.wholeLine) return <span key={j}>{chunk.text}</span>;
-                  return (
-                    <span key={j}>
-                      {chunk.text.split(/(\s+)/).map((part, k) => {
-                        const key = wordKey(part);
-                        const changed = !!key && !diff.shared.has(key);
-                        return changed
-                          ? <Box key={k} component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{part}</Box>
-                          : <span key={k}>{part}</span>;
-                      })}
-                    </span>
-                  );
-                }) : '\u00a0'}
-              </Typography>
-              {scaledBits.length > 0 && (
-                <Typography component="div" sx={{ fontSize: 16, color: '#1565c0', fontWeight: 700, marginLeft: 'auto', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  {scaledBits.join('   ')}
+            <Box key={i} sx={{ display: 'contents' }}>
+              {showAdjusted && (
+                <Typography component="div" sx={{ fontSize: 16, color: '#1565c0', fontWeight: 700, textAlign: 'left', whiteSpace: 'nowrap' }}>
+                  {row.scaled || '\u00a0'}
                 </Typography>
               )}
+              <Typography component="div" sx={{ fontSize: 16, textAlign: 'left', whiteSpace: 'nowrap' }}>
+                {row.original || '\u00a0'}
+              </Typography>
+              <Typography component="div" sx={{ fontSize: 16, textAlign: 'left' }}>
+                {ingredientNode}
+              </Typography>
             </Box>
           );
         })}
-      </>
+      </Box>
     );
   };
 
@@ -627,14 +594,14 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           <Button
             variant={highlightDiffs ? 'contained' : 'outlined'}
             color={highlightDiffs ? 'error' : 'primary'}
-            sx={{ borderRadius: 2, textTransform: 'none' }}
+            sx={{ borderRadius: '4px !important', textTransform: 'none' }}
             onClick={() => {
               const next = !highlightDiffs;
               setHighlightDiffs(next);
               try { localStorage.setItem('recipeHighlightDiffs', next ? '1' : '0'); } catch { /* ignore */ }
             }}
           >
-            {highlightDiffs ? 'Variations highlighted' : 'Highlight variations'}
+            {highlightDiffs ? 'Unhighlight' : 'Highlight'}
           </Button>
         )}
         {versions.map((v: Version, idx: number) => (
@@ -709,12 +676,6 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           )}
         </Box>
       )}
-      <Box display="flex" alignItems="center" mb={2}>
-        <Rating name="user-rating" value={userRating} onChange={handleRatingChange} size="large" />
-        <Typography variant="body2" sx={{ ml: 2 }}>
-          {averageRating ? `${t('averageRating')}: ${averageRating.toFixed(2)} / 5` : `${t('noRatingsYet')}`}
-        </Typography>
-      </Box>
       <Typography variant="subtitle1" color="text.secondary" gutterBottom>
         {isOwner && isEditing ? (
           <TextField value={editFields?.description || ''} onChange={e => handleFieldChange('description', e.target.value)} variant="standard" fullWidth multiline InputProps={{ disableUnderline: true, style: { fontSize: 18 } }} />
@@ -722,41 +683,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           editFields?.description || selectedVersion.description
         )}
       </Typography>
-      <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-        <Box>
-          <Typography variant="subtitle2" color="text.secondary">Cook Time:</Typography>
-          {isOwner && isEditing ? (
-            <TextField type="number" value={recipe?.estimatedTime || ''} onChange={(e) => { setRecipe(prev => prev ? { ...prev, estimatedTime: e.target.value } : null); }} size="small" sx={{ minWidth: 120 }} placeholder="Enter minutes" label="Minutes" inputProps={{ min: 1, max: 480 }} />
-          ) : (
-            <Typography variant="body1">
-              {recipe?.estimatedTime ? (() => {
-                const minutes = parseInt(recipe.estimatedTime);
-                if (minutes >= 60) {
-                  const hours = Math.floor(minutes / 60);
-                  const remainingMins = minutes % 60;
-                  return remainingMins === 0 ? `${hours}h` : `${hours}h ${remainingMins}m`;
-                }
-                return `${minutes}m`;
-              })() : 'Pending...'}
-            </Typography>
-          )}
-        </Box>
-        <Box>
-          <Typography variant="subtitle2" color="text.secondary">Difficulty:</Typography>
-          {isOwner && isEditing ? (
-            <TextField select value={recipe?.difficulty || ''} onChange={(e) => { setRecipe(prev => prev ? { ...prev, difficulty: e.target.value } : null); }} size="small" sx={{ minWidth: 120 }}>
-              <option value="">Undetermined</option>
-              <option value="Easy">Easy</option>
-              <option value="Medium">Medium</option>
-              <option value="Advanced">Advanced</option>
-            </TextField>
-          ) : (
-            <Typography variant="body1">{recipe?.difficulty || 'Undetermined'}</Typography>
-          )}
-        </Box>
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mt: 2 }}>
-        <Typography variant="h6">{t('ingredients')}</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 2, mt: 2 }}>
         <TextField
           size="small"
           label="Multiply"
@@ -766,20 +693,18 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           inputProps={{ step: 'any', min: 0 }}
           sx={{ width: 140 }}
         />
+        <Typography variant="h6">{t('ingredients')}</Typography>
       </Box>
-      <Box sx={{ background: '#f5f5f5', p: 2, borderRadius: 1, overflowX: 'auto', '& p': { margin: '0.25em 0' }, '& ul, & ol': { margin: '0.25em 0', pl: 2 } }}>
+      <Box sx={{ background: '#f5f5f5', p: 2, borderRadius: 1, overflowX: 'auto' }}>
         {isOwner && isEditing ? (
           <TextField value={editFields?.ingredients || ''} onChange={e => handleFieldChange('ingredients', e.target.value)} variant="standard" fullWidth multiline minRows={4} placeholder="One per line or use markdown." InputProps={{ disableUnderline: true, style: { fontFamily: 'inherit', fontSize: 16 } }} />
-        ) : scaleIngredients ? (
-          renderScaledIngredients(
+        ) : (
+          renderIngredientColumns(
             editFields?.ingredients ?? selectedVersion?.ingredients,
             showDiffs ? versions.filter((_, idx) => idx !== selectedVersionIdx).map((v) => v.ingredients || '') : null,
-            multiplier
+            multiplier,
+            scaleIngredients
           )
-        ) : showDiffs ? (
-          renderDiffLines(editFields?.ingredients ?? selectedVersion?.ingredients, versions.filter((_, idx) => idx !== selectedVersionIdx).map((v) => v.ingredients || ''))
-        ) : (
-          renderMarkdownWithBlankLines(editFields?.ingredients ?? selectedVersion?.ingredients ?? '')
         )}
       </Box>
       <Typography variant="h6" mt={2}>{t('instructions')}</Typography>
