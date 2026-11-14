@@ -411,28 +411,54 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     }
   };
 
-  const linesIn = (text: string | undefined) => new Set(
-    String(text ?? '').replace(/\r\n/g, '\n').split('\n').map((line) => line.trim()).filter(Boolean)
-  );
+  const wordKey = (word: string) => word.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
 
-  const linesSharedByEveryOther = (field: 'ingredients' | 'instructions') => {
-    const others = versions.filter((_, idx) => idx !== selectedVersionIdx).map((v) => linesIn(v[field]));
-    if (others.length === 0) return new Set<string>();
-    const [first, ...rest] = others;
-    const shared = new Set<string>();
-    first.forEach((line) => {
-      if (rest.every((set) => set.has(line))) shared.add(line);
+  const wordsInLine = (line: string) => {
+    const keys = new Set<string>();
+    line.split(/\s+/).forEach((word) => {
+      const key = wordKey(word);
+      if (key) keys.add(key);
+    });
+    return keys;
+  };
+
+  const wordsSharedWithEveryOther = (line: string, otherTexts: string[]) => {
+    const mine = wordsInLine(line);
+    let shared = new Set(mine);
+    otherTexts.forEach((text) => {
+      const otherLines = String(text ?? '').replace(/\r\n/g, '\n').split('\n');
+      let best = new Set<string>();
+      let bestScore = -1;
+      otherLines.forEach((otherLine) => {
+        const otherWords = wordsInLine(otherLine);
+        let score = 0;
+        mine.forEach((word) => { if (otherWords.has(word)) score += 1; });
+        if (score > bestScore) {
+          bestScore = score;
+          best = otherWords;
+        }
+      });
+      const next = new Set<string>();
+      shared.forEach((word) => { if (best.has(word)) next.add(word); });
+      shared = next;
     });
     return shared;
   };
 
-  const renderDiffLines = (current: string | undefined, shared: Set<string>) => (
+  const renderDiffLines = (current: string | undefined, otherTexts: string[]) => (
     <>
       {String(current ?? '').replace(/\r\n/g, '\n').split('\n').map((line, i) => {
-        const changed = line.trim().length > 0 && !shared.has(line.trim());
+        const shared = wordsSharedWithEveryOther(line, otherTexts);
+        const parts = line.split(/(\s+)/);
         return (
-          <Typography key={i} component="div" sx={{ fontSize: 16, whiteSpace: 'pre-wrap', minHeight: '1.4em', color: changed ? '#c62828' : 'inherit', fontWeight: changed ? 600 : 400 }}>
-            {line || '\u00a0'}
+          <Typography key={i} component="div" sx={{ fontSize: 16, whiteSpace: 'pre-wrap', minHeight: '1.4em' }}>
+            {line ? parts.map((part, j) => {
+              const key = wordKey(part);
+              const changed = !!key && !shared.has(key);
+              return changed
+                ? <Box key={j} component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{part}</Box>
+                : <span key={j}>{part}</span>;
+            }) : '\u00a0'}
           </Typography>
         );
       })}
@@ -546,14 +572,14 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       <Typography variant="h6" mt={2}>{t('ingredients')}</Typography>
       {showDiffs && (
         <Typography variant="body2" sx={{ color: '#c62828', mb: 0.5 }}>
-          Red lines are not in every variation.
+          Red words are not in every variation.
         </Typography>
       )}
       <Box sx={{ background: '#f5f5f5', p: 2, borderRadius: 1, overflowX: 'auto', '& p': { margin: '0.25em 0' }, '& ul, & ol': { margin: '0.25em 0', pl: 2 } }}>
         {isOwner && isEditing ? (
           <TextField value={editFields?.ingredients || ''} onChange={e => handleFieldChange('ingredients', e.target.value)} variant="standard" fullWidth multiline minRows={4} placeholder="One per line or use markdown." InputProps={{ disableUnderline: true, style: { fontFamily: 'inherit', fontSize: 16 } }} />
         ) : showDiffs ? (
-          renderDiffLines(editFields?.ingredients ?? selectedVersion?.ingredients, linesSharedByEveryOther('ingredients'))
+          renderDiffLines(editFields?.ingredients ?? selectedVersion?.ingredients, versions.filter((_, idx) => idx !== selectedVersionIdx).map((v) => v.ingredients || ''))
         ) : (
           renderMarkdownWithBlankLines(editFields?.ingredients ?? selectedVersion?.ingredients ?? '')
         )}
@@ -563,7 +589,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
         {isOwner && isEditing ? (
           <TextField value={editFields?.instructions || ''} onChange={e => handleFieldChange('instructions', e.target.value)} variant="standard" fullWidth multiline minRows={6} placeholder="One step per line or use markdown." InputProps={{ disableUnderline: true, style: { fontFamily: 'inherit', fontSize: 16 } }} />
         ) : showDiffs ? (
-          renderDiffLines(editFields?.instructions ?? selectedVersion?.instructions, linesSharedByEveryOther('instructions'))
+          renderDiffLines(editFields?.instructions ?? selectedVersion?.instructions, versions.filter((_, idx) => idx !== selectedVersionIdx).map((v) => v.instructions || ''))
         ) : (
           renderMarkdownWithBlankLines(editFields?.instructions ?? selectedVersion?.instructions ?? '')
         )}
