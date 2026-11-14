@@ -514,12 +514,11 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     return true;
   };
 
-  const renderIngredientColumns = (current: string | undefined, otherTexts: string[] | null, multiplier: number, showAdjusted: boolean) => {
+  const renderIngredientColumns = (current: string | undefined, otherTexts: string[] | null, multiplier: number, showAdjusted: boolean, editing: boolean) => {
     const qtyRe = /(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:[.,]\d+)?|[½⅓⅔¼¾⅛⅜⅝⅞])/g;
     const unitRe = /^(?:cups?|c|tbsps?|tablespoons?|tbs|tsps?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|l|liters?|litres?|pinch(?:es)?|cloves?|cans?|packages?|pkg|slices?|pieces?|bunch(?:es)?|sprigs?|heads?|stalks?|sheets?|sticks?|dash(?:es)?|handfuls?|quarts?|pints?|gallons?)$/i;
-    const rows = String(current ?? '').replace(/\r\n/g, '\n').split('\n').map((raw) => {
+    const parseLine = (raw: string) => {
       const line = raw.replace(/^\s*[-*+]\s+/, '');
-      const diff = otherTexts ? wordsSharedWithEveryOther(raw, otherTexts) : null;
       qtyRe.lastIndex = 0;
       let match: RegExpExecArray | null;
       while ((match = qtyRe.exec(line))) {
@@ -531,14 +530,50 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
         const ingredient = (unit ? after.slice(after.indexOf(unit) + unit.length) : after).replace(/^\s+/, '');
         const value = parseQtyToken(match[0]);
         const scaled = value == null ? '' : `${formatQty(value * multiplier)}${unit ? ` ${unit}` : ''}`;
-        return { original: unit ? `${match[0]} ${unit}` : match[0], scaled, ingredient, diff, raw };
+        return { original: unit ? `${match[0]} ${unit}` : match[0], scaled, ingredient };
       }
-      return { original: '', scaled: '', ingredient: line.trim(), diff, raw };
+      return { original: '', scaled: '', ingredient: line };
+    };
+    const splitLines = String(current ?? '').replace(/\r\n/g, '\n').split('\n');
+    const sourceLines = splitLines.length === 1 && splitLines[0] === '' ? [] : splitLines;
+    const rows = sourceLines.map((raw) => ({ ...parseLine(raw), diff: otherTexts ? wordsSharedWithEveryOther(raw, otherTexts) : null }));
+    if (editing) rows.push({ original: '', scaled: '', ingredient: '', diff: null });
+
+    const writeRow = (index: number, field: 'original' | 'ingredient', value: string) => {
+      const next = sourceLines.slice();
+      while (next.length <= index) next.push('');
+      const parsed = parseLine(next[index] ?? '');
+      parsed[field] = value;
+      const qty = parsed.original.trim();
+      const name = parsed.ingredient.trim();
+      next[index] = qty && name ? `${qty} ${name}` : qty || name;
+      handleFieldChange('ingredients', next.join('\n').replace(/\n+$/, ''));
+    };
+
+    const fieldStyle = (text: string): React.CSSProperties => ({
+      width: `${Math.max(text.length, 1)}ch`,
+      maxWidth: '100%',
+      border: 'none',
+      outline: 'none',
+      background: 'transparent',
+      font: 'inherit',
+      fontSize: 16,
+      padding: 0,
+      margin: 0,
+      color: 'inherit',
     });
+
     return (
-      <Box sx={{ display: 'grid', gridTemplateColumns: showAdjusted ? 'max-content max-content minmax(0, 1fr)' : 'max-content minmax(0, 1fr)', columnGap: 2, rowGap: 0.5, justifyItems: 'start', alignItems: 'baseline' }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: showAdjusted ? 'max-content max-content minmax(0, 1fr)' : 'max-content minmax(0, 1fr)', columnGap: '0.6rem', rowGap: 0.25, justifyItems: 'start', alignItems: 'baseline' }}>
         {rows.map((row, i) => {
-          const ingredientNode = !row.ingredient ? '\u00a0' : row.diff?.wholeLine ? (
+          const ingredientNode = editing ? (
+            <input
+              value={row.ingredient}
+              onChange={(e) => writeRow(i, 'ingredient', e.target.value)}
+              placeholder={i === rows.length - 1 ? 'Ingredient' : ''}
+              style={{ ...fieldStyle(row.ingredient || 'Ingredient'), width: '100%' }}
+            />
+          ) : !row.ingredient ? '\u00a0' : row.diff?.wholeLine ? (
             <Box component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{row.ingredient}</Box>
           ) : row.diff ? (
             row.ingredient.split(/(\s+)/).map((part, k) => {
@@ -552,16 +587,25 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           return (
             <Box key={i} sx={{ display: 'contents' }}>
               {showAdjusted && (
-                <Typography component="div" sx={{ fontSize: 16, color: '#1565c0', fontWeight: 700, textAlign: 'left', whiteSpace: 'nowrap', width: 'max-content' }}>
-                  {row.scaled || '\u00a0'}
-                </Typography>
+                <Box component="div" sx={{ fontSize: 16, color: '#1565c0', fontWeight: 700, whiteSpace: 'nowrap', width: 'max-content' }}>
+                  {row.scaled}
+                </Box>
               )}
-              <Typography component="div" sx={{ fontSize: 16, textAlign: 'left', whiteSpace: 'nowrap', width: 'max-content' }}>
-                {row.original || '\u00a0'}
-              </Typography>
-              <Typography component="div" sx={{ fontSize: 16, textAlign: 'left' }}>
+              {editing ? (
+                <input
+                  value={row.original}
+                  onChange={(e) => writeRow(i, 'original', e.target.value)}
+                  placeholder="Qty"
+                  style={fieldStyle(row.original || 'Qty')}
+                />
+              ) : (
+                <Box component="div" sx={{ fontSize: 16, whiteSpace: 'nowrap', width: 'max-content' }}>
+                  {row.original}
+                </Box>
+              )}
+              <Box component="div" sx={{ fontSize: 16, width: '100%' }}>
                 {ingredientNode}
-              </Typography>
+              </Box>
             </Box>
           );
         })}
@@ -585,7 +629,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   const showDiffs = highlightDiffs && versions.length > 1 && !(isOwner && isEditing);
   const parsedMultiplier = Number(multiplierInput);
   const multiplier = Number.isFinite(parsedMultiplier) && parsedMultiplier > 0 ? parsedMultiplier : 1;
-  const scaleIngredients = !(isOwner && isEditing) && Math.abs(multiplier - 1) > 0.0001;
+  const scaleIngredients = Math.abs(multiplier - 1) > 0.0001;
 
   return (
     <Paper sx={{ p: 4, maxWidth: 900, mx: 'auto', width: '100%' }}>
@@ -700,13 +744,14 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       </Box>
       <Box sx={{ background: '#f5f5f5', p: 2, borderRadius: 1, overflowX: 'auto' }}>
         {isOwner && isEditing ? (
-          <TextField value={editFields?.ingredients || ''} onChange={e => handleFieldChange('ingredients', e.target.value)} variant="standard" fullWidth multiline minRows={4} placeholder="One per line or use markdown." InputProps={{ disableUnderline: true, style: { fontFamily: 'inherit', fontSize: 16 } }} />
+          renderIngredientColumns(editFields?.ingredients ?? '', null, multiplier, scaleIngredients, true)
         ) : (
           renderIngredientColumns(
             editFields?.ingredients ?? selectedVersion?.ingredients,
             showDiffs ? versions.filter((_, idx) => idx !== selectedVersionIdx).map((v) => v.ingredients || '') : null,
             multiplier,
-            scaleIngredients
+            scaleIngredients,
+            false
           )
         )}
       </Box>
