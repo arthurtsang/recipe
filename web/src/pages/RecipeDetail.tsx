@@ -536,7 +536,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       return { original: '', scaled: '', ingredient: line.trim(), diff, raw };
     });
     return (
-      <Box sx={{ display: 'grid', gridTemplateColumns: '7.5rem 7.5rem minmax(0, 1fr)', columnGap: 3, rowGap: 0.5, justifyItems: 'start', alignItems: 'baseline' }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: showAdjusted ? 'max-content max-content minmax(0, 1fr)' : 'max-content minmax(0, 1fr)', columnGap: 2, rowGap: 0.5, justifyItems: 'start', alignItems: 'baseline' }}>
         {rows.map((row, i) => {
           const ingredientNode = !row.ingredient ? '\u00a0' : row.diff?.wholeLine ? (
             <Box component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{row.ingredient}</Box>
@@ -551,10 +551,12 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           ) : row.ingredient;
           return (
             <Box key={i} sx={{ display: 'contents' }}>
-              <Typography component="div" sx={{ fontSize: 16, color: '#1565c0', fontWeight: 700, textAlign: 'left', whiteSpace: 'nowrap' }}>
-                {showAdjusted ? (row.scaled || '\u00a0') : '\u00a0'}
-              </Typography>
-              <Typography component="div" sx={{ fontSize: 16, textAlign: 'left', whiteSpace: 'nowrap' }}>
+              {showAdjusted && (
+                <Typography component="div" sx={{ fontSize: 16, color: '#1565c0', fontWeight: 700, textAlign: 'left', whiteSpace: 'nowrap', width: 'max-content' }}>
+                  {row.scaled || '\u00a0'}
+                </Typography>
+              )}
+              <Typography component="div" sx={{ fontSize: 16, textAlign: 'left', whiteSpace: 'nowrap', width: 'max-content' }}>
                 {row.original || '\u00a0'}
               </Typography>
               <Typography component="div" sx={{ fontSize: 16, textAlign: 'left' }}>
