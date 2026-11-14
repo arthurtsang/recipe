@@ -558,36 +558,44 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
           }
           if (last < line.length) chunks.push({ text: line.slice(last), qty: false });
           if (chunks.length === 0) chunks.push({ text: line, qty: false });
+          const scaledBits: string[] = [];
+          chunks.forEach((chunk, j) => {
+            if (!chunk.qty) return;
+            const value = parseQtyToken(chunk.text);
+            const scaled = value == null ? '' : formatQty(value * multiplier);
+            if (!scaled) return;
+            const next = chunks[j + 1]?.text ?? '';
+            const unitMatch = next.match(/^\s*([A-Za-z][A-Za-z.]*)/);
+            const unit = unitMatch && /^(?:cups?|c|tbsps?|tablespoons?|tbs|tsps?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|l|liters?|litres?|pinch(?:es)?|cloves?|cans?|packages?|pkg|slices?|pieces?|bunch(?:es)?|sprigs?|heads?|stalks?|sheets?|sticks?|dash(?:es)?|handfuls?|quarts?|pints?|gallons?)$/i.test(unitMatch[1])
+              ? unitMatch[1]
+              : '';
+            scaledBits.push(unit ? `${scaled} ${unit}` : scaled);
+          });
           return (
-            <Typography key={i} component="div" sx={{ fontSize: 16, whiteSpace: 'pre-wrap', minHeight: '1.4em' }}>
-              {line ? chunks.map((chunk, j) => {
-                if (chunk.qty) {
-                  const value = parseQtyToken(chunk.text);
-                  const scaled = value == null ? '' : formatQty(value * multiplier);
+            <Box key={i} sx={{ display: 'flex', alignItems: 'baseline', gap: 2, minHeight: '1.4em' }}>
+              <Typography component="div" sx={{ fontSize: 16, whiteSpace: 'pre-wrap', flex: '1 1 auto' }}>
+                {line ? chunks.map((chunk, j) => {
+                  if (diff?.wholeLine && !chunk.qty) return <Box key={j} component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{chunk.text}</Box>;
+                  if (!diff || chunk.qty || diff.wholeLine) return <span key={j}>{chunk.text}</span>;
                   return (
                     <span key={j}>
-                      <span>{chunk.text}</span>
-                      {scaled && (
-                        <Box component="span" sx={{ color: '#1565c0', fontWeight: 700 }}>{` ${scaled}`}</Box>
-                      )}
+                      {chunk.text.split(/(\s+)/).map((part, k) => {
+                        const key = wordKey(part);
+                        const changed = !!key && !diff.shared.has(key);
+                        return changed
+                          ? <Box key={k} component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{part}</Box>
+                          : <span key={k}>{part}</span>;
+                      })}
                     </span>
                   );
-                }
-                if (diff?.wholeLine) return <Box key={j} component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{chunk.text}</Box>;
-                if (!diff) return <span key={j}>{chunk.text}</span>;
-                return (
-                  <span key={j}>
-                    {chunk.text.split(/(\s+)/).map((part, k) => {
-                      const key = wordKey(part);
-                      const changed = !!key && !diff.shared.has(key);
-                      return changed
-                        ? <Box key={k} component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{part}</Box>
-                        : <span key={k}>{part}</span>;
-                    })}
-                  </span>
-                );
-              }) : '\u00a0'}
-            </Typography>
+                }) : '\u00a0'}
+              </Typography>
+              {scaledBits.length > 0 && (
+                <Typography component="div" sx={{ fontSize: 16, color: '#1565c0', fontWeight: 700, marginLeft: 'auto', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  {scaledBits.join('   ')}
+                </Typography>
+              )}
+            </Box>
           );
         })}
       </>
