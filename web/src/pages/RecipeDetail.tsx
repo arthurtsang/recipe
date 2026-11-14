@@ -407,59 +407,153 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
 
   const wordKey = (word: string) => word.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
 
-  const textPieces = (text: string) => text.match(/\s+|[^\p{L}\p{N}\s]+|[\p{L}\p{N}]+/gu) ?? [];
-
-  const sharedAcrossVariations = (otherTexts: string[]) => {
-    let words: Set<string> | null = null;
-    let punct: Set<string> | null = null;
-    otherTexts.forEach((text) => {
-      const wordSet = new Set<string>();
-      const punctSet = new Set<string>();
-      textPieces(String(text ?? '')).forEach((piece) => {
-        if (/^\s+$/.test(piece)) return;
-        if (/^[^\p{L}\p{N}]+$/u.test(piece)) {
-          piece.split('').forEach((ch) => punctSet.add(ch));
-          return;
-        }
-        const key = wordKey(piece);
-        if (key) wordSet.add(key);
-      });
-      words = words ? new Set([...words].filter((w) => wordSet.has(w))) : wordSet;
-      punct = punct ? new Set([...punct].filter((ch) => punctSet.has(ch))) : punctSet;
-    });
-    return { words: words ?? new Set<string>(), punct: punct ?? new Set<string>() };
+  const tokenSpans = (text: string) => {
+    const re = /\s+|[^\p{L}\p{N}\s]+|[\p{L}\p{N}]+/gu;
+    const spans: { key: string; start: number; end: number }[] = [];
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(text))) {
+      if (/^\s+$/.test(match[0])) continue;
+      const key = /^[\p{L}\p{N}]+$/u.test(match[0]) ? wordKey(match[0]) : match[0];
+      spans.push({ key, start: match.index, end: match.index + match[0].length });
+    }
+    return spans;
   };
 
-  const renderDiffText = (text: string, shared: { words: Set<string>; punct: Set<string> }) => (
-    <>
-      {textPieces(text).map((piece, i) => {
-        if (/^\s+$/.test(piece)) return <span key={i}>{piece}</span>;
-        if (/^[^\p{L}\p{N}]+$/u.test(piece)) {
-          return (
-            <span key={i}>
-              {piece.split('').map((ch, j) => (
-                shared.punct.has(ch)
-                  ? <span key={j}>{ch}</span>
-                  : <Box key={j} component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{ch}</Box>
-              ))}
-            </span>
-          );
+  const wordTokens = (text: string) => tokenSpans(text).filter((span) => /^[\p{L}\p{N}]+$/u.test(text.slice(span.start, span.end))).map((span) => span.key);
+
+  const lcsKeep = (a: string[], b: string[]) => {
+    const n = a.length;
+    const m = b.length;
+    const dp = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0));
+    for (let i = 1; i <= n; i += 1) {
+      for (let j = 1; j <= m; j += 1) {
+        dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+    const keep = Array(n).fill(false);
+    let i = n;
+    let j = m;
+    while (i > 0 && j > 0) {
+      if (a[i - 1] === b[j - 1]) {
+        keep[i - 1] = true;
+        i -= 1;
+        j -= 1;
+      } else if (dp[i - 1][j] >= dp[i][j - 1]) i -= 1;
+      else j -= 1;
+    }
+    return keep;
+  };
+
+  const lineSimilarity = (a: string, b: string) => {
+    const ta = wordTokens(a);
+    const tb = wordTokens(b);
+    if (ta.length === 0 && tb.length === 0) return 1;
+    if (ta.length === 0 || tb.length === 0) return 0;
+    const common = lcsKeep(ta, tb).filter(Boolean).length;
+    return (2 * common) / (ta.length + tb.length);
+  };
+
+  const alignLines = (current: string[], other: string[]) => {
+    const n = current.length;
+    const m = other.length;
+    const sim = current.map((line) => other.map((candidate) => lineSimilarity(line, candidate)));
+    const dp = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0));
+    const choice = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0));
+    for (let i = 1; i <= n; i += 1) {
+      for (let j = 1; j <= m; j += 1) {
+        let best = dp[i - 1][j];
+        let how = 0;
+        if (dp[i][j - 1] > best) {
+          best = dp[i][j - 1];
+          how = 1;
         }
-        const changed = !shared.words.has(wordKey(piece));
-        return changed
-          ? <Box key={i} component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{piece}</Box>
-          : <span key={i}>{piece}</span>;
-      })}
-    </>
-  );
+        const score = sim[i - 1][j - 1];
+        if (score >= 0.45 && dp[i - 1][j - 1] + score >= best) {
+          best = dp[i - 1][j - 1] + score;
+          how = 2;
+        }
+        dp[i][j] = best;
+        choice[i][j] = how;
+      }
+    }
+    const mapped: (number | null)[] = Array(n).fill(null);
+    let i = n;
+    let j = m;
+    while (i > 0 && j > 0) {
+      const how = choice[i][j];
+      if (how === 2) {
+        mapped[i - 1] = j - 1;
+        i -= 1;
+        j -= 1;
+      } else if (how === 1) j -= 1;
+      else i -= 1;
+    }
+    return mapped;
+  };
+
+  const highlightMask = (current: string, other: string | null) => {
+    const mask = Array(current.length).fill(false);
+    if (!current.trim()) return mask;
+    if (other == null) {
+      mask.fill(true);
+      return mask;
+    }
+    const a = tokenSpans(current);
+    const b = tokenSpans(other);
+    const keep = lcsKeep(a.map((span) => span.key), b.map((span) => span.key));
+    a.forEach((span, index) => {
+      if (keep[index]) return;
+      for (let c = span.start; c < span.end; c += 1) mask[c] = true;
+    });
+    for (let index = 0; index < a.length - 1; index += 1) {
+      if (keep[index] || keep[index + 1]) continue;
+      for (let c = a[index].end; c < a[index + 1].start; c += 1) mask[c] = true;
+    }
+    return mask;
+  };
+
+  const masksForLines = (currentLines: string[], otherTexts: string[]) => {
+    const masks = currentLines.map((line) => Array(line.length).fill(false));
+    otherTexts.forEach((text) => {
+      const otherLines = String(text ?? '').replace(/\r\n/g, '\n').split('\n');
+      const aligned = alignLines(currentLines, otherLines);
+      currentLines.forEach((line, index) => {
+        const otherIndex = aligned[index];
+        const mask = highlightMask(line, otherIndex == null ? null : otherLines[otherIndex]);
+        mask.forEach((on, charIndex) => {
+          if (on) masks[index][charIndex] = true;
+        });
+      });
+    });
+    return masks;
+  };
+
+  const renderMasked = (text: string, mask: boolean[] | null) => {
+    if (!text) return '\u00a0';
+    if (!mask) return text;
+    const nodes: React.ReactNode[] = [];
+    let i = 0;
+    while (i < text.length) {
+      const on = !!mask[i];
+      let j = i + 1;
+      while (j < text.length && !!mask[j] === on) j += 1;
+      const slice = text.slice(i, j);
+      nodes.push(on
+        ? <Box key={i} component="span" sx={{ color: '#c62828', fontWeight: 700 }}>{slice}</Box>
+        : <span key={i}>{slice}</span>);
+      i = j;
+    }
+    return <>{nodes}</>;
+  };
 
   const renderDiffLines = (current: string | undefined, otherTexts: string[]) => {
-    const shared = sharedAcrossVariations(otherTexts);
+    const lines = String(current ?? '').replace(/\r\n/g, '\n').split('\n');
+    const masks = masksForLines(lines, otherTexts);
     return (
       <>
-        {String(current ?? '').replace(/\r\n/g, '\n').split('\n').map((line, i) => (
+        {lines.map((line, i) => (
           <Typography key={i} component="div" sx={{ fontSize: 16, whiteSpace: 'pre-wrap', minHeight: '1.4em' }}>
-            {line ? renderDiffText(line, shared) : '\u00a0'}
+            {line ? renderMasked(line, masks[i]) : '\u00a0'}
           </Typography>
         ))}
       </>
@@ -520,27 +614,34 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     const qtyRe = /(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:[.,]\d+)?|[½⅓⅔¼¾⅛⅜⅝⅞])/g;
     const unitRe = /^(?:cups?|c|tbsps?|tablespoons?|tbs|tsps?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|l|liters?|litres?|pinch(?:es)?|cloves?|cans?|packages?|pkg|slices?|pieces?|bunch(?:es)?|sprigs?|heads?|stalks?|sheets?|sticks?|dash(?:es)?|handfuls?|quarts?|pints?|gallons?)$/i;
     const parseLine = (raw: string) => {
-      const line = raw.replace(/^\s*[-*+]\s+/, '');
+      const shown = raw.replace(/^\s*[-*+]\s+/, '');
       qtyRe.lastIndex = 0;
       let match: RegExpExecArray | null;
-      while ((match = qtyRe.exec(line))) {
-        if (!shouldScaleQty(line, match.index, match[0])) continue;
-        if (line.slice(0, match.index).trim()) break;
-        const after = line.slice(match.index + match[0].length);
+      while ((match = qtyRe.exec(shown))) {
+        if (!shouldScaleQty(shown, match.index, match[0])) continue;
+        if (shown.slice(0, match.index).trim()) break;
+        const after = shown.slice(match.index + match[0].length);
         const unitMatch = after.match(/^\s*([A-Za-z][A-Za-z.]*)/);
         const unit = unitMatch && unitRe.test(unitMatch[1]) ? unitMatch[1] : '';
-        const ingredient = (unit ? after.slice(after.indexOf(unit) + unit.length) : after).replace(/^\s+/, '');
+        const qtyStart = match.index;
+        let qtyEnd = match.index + match[0].length;
+        if (unit && unitMatch) {
+          qtyEnd = match.index + match[0].length + after.indexOf(unitMatch[1]) + unit.length;
+        }
+        let ingStart = qtyEnd;
+        while (ingStart < shown.length && /\s/.test(shown[ingStart])) ingStart += 1;
         const value = parseQtyToken(match[0]);
         const scaled = value == null ? '' : `${formatQty(value * multiplier)}${unit ? ` ${unit}` : ''}`;
-        return { original: unit ? `${match[0]} ${unit}` : match[0], scaled, ingredient };
+        return { shown, original: shown.slice(qtyStart, qtyEnd), ingredient: shown.slice(ingStart), scaled, qtyStart, qtyEnd, ingStart };
       }
-      return { original: '', scaled: '', ingredient: line };
+      return { shown, original: '', ingredient: shown, scaled: '', qtyStart: 0, qtyEnd: 0, ingStart: 0 };
     };
     const splitLines = String(current ?? '').replace(/\r\n/g, '\n').split('\n');
     const sourceLines = splitLines.length === 1 && splitLines[0] === '' ? [] : splitLines;
-    const ingredientShared = otherTexts ? sharedAcrossVariations(otherTexts) : null;
+    const shownLines = sourceLines.map((raw) => raw.replace(/^\s*[-*+]\s+/, ''));
+    const lineMasks = otherTexts ? masksForLines(shownLines, otherTexts.map((text) => String(text ?? '').replace(/\r\n/g, '\n').split('\n').map((line) => line.replace(/^\s*[-*+]\s+/, '')).join('\n'))) : null;
     const rows = sourceLines.map((raw) => ({ ...parseLine(raw), raw }));
-    if (editing) rows.push({ original: '', scaled: '', ingredient: '', raw: '' });
+    if (editing) rows.push({ original: '', scaled: '', ingredient: '', raw: '', shown: '', qtyStart: 0, qtyEnd: 0, ingStart: 0 });
 
     const writeRow = (index: number, field: 'original' | 'ingredient', value: string) => {
       const next = sourceLines.slice();
@@ -569,6 +670,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     return (
       <Box sx={{ display: 'grid', gridTemplateColumns: showAdjusted ? 'max-content max-content minmax(0, 1fr)' : 'max-content minmax(0, 1fr)', columnGap: '0.6rem', rowGap: 0.25, justifyItems: 'start', alignItems: 'baseline' }}>
         {rows.map((row, i) => {
+          const mask = lineMasks?.[i] ?? null;
           const ingredientNode = editing ? (
             <input
               value={row.ingredient}
@@ -576,9 +678,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
               placeholder={i === rows.length - 1 ? 'Ingredient' : ''}
               style={{ ...fieldStyle(row.ingredient || 'Ingredient'), width: '100%' }}
             />
-          ) : !row.ingredient ? '\u00a0' : ingredientShared ? (
-            renderDiffText(row.ingredient, ingredientShared)
-          ) : row.ingredient;
+          ) : !row.ingredient ? '\u00a0' : renderMasked(row.ingredient, mask ? mask.slice(row.ingStart, row.ingStart + row.ingredient.length) : null);
           return (
             <Box key={i} sx={{ display: 'contents' }}>
               {showAdjusted && (
@@ -595,7 +695,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
                 />
               ) : (
                 <Box component="div" sx={{ fontSize: 16, whiteSpace: 'nowrap', width: 'max-content' }}>
-                  {row.original}
+                  {row.original ? renderMasked(row.original, mask ? mask.slice(row.qtyStart, row.qtyEnd) : null) : ''}
                 </Box>
               )}
               <Box component="div" sx={{ fontSize: 16, width: '100%' }}>
