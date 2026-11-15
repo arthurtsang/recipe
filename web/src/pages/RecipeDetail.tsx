@@ -408,13 +408,18 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   const wordKey = (word: string) => word.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
 
   const tokenSpans = (text: string) => {
-    const re = /\s+|[^\p{L}\p{N}\s]+|[\p{L}\p{N}]+/gu;
+    const re = /(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:[.,]\d+)?|[½⅓⅔¼¾⅛⅜⅝⅞])|([\p{L}]+)|([^\p{L}\p{N}\s]+)/gu;
     const spans: { key: string; start: number; end: number }[] = [];
     let match: RegExpExecArray | null;
     while ((match = re.exec(text))) {
-      if (/^\s+$/.test(match[0])) continue;
-      const key = /^[\p{L}\p{N}]+$/u.test(match[0]) ? wordKey(match[0]) : match[0];
-      spans.push({ key, start: match.index, end: match.index + match[0].length });
+      const raw = match[0];
+      if (/^\s+$/.test(raw)) continue;
+      const key = match[1]
+        ? match[1].toLowerCase().replace(/\s+/g, ' ')
+        : match[2]
+          ? wordKey(match[2])
+          : raw;
+      spans.push({ key, start: match.index, end: match.index + raw.length });
     }
     return spans;
   };
