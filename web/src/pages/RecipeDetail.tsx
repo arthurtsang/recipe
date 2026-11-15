@@ -890,7 +890,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       <Dialog open={newVariationOpen} onClose={() => setNewVariationOpen(false)}>
         <DialogTitle>New Variation</DialogTitle>
         <DialogContent>
-          <Typography gutterBottom>Name this variation (for example Parmesan or Havarti).</Typography>
+          <Typography gutterBottom>Name this variation.</Typography>
           <TextField autoFocus margin="dense" label="Variation name" type="text" fullWidth value={newVariationName} onChange={e => setNewVariationName(e.target.value)} />
         </DialogContent>
         <DialogActions>
