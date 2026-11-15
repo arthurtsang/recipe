@@ -234,13 +234,8 @@ export async function saveImportedRecipe(req: Request, res: Response) {
     }
 
     const title = result.title;
-    const description = result.description ?? '';
     const ingredients = result.ingredients ?? '';
     const instructions = result.instructions ?? '';
-    const cookTime = result.cookTime ?? result.estimatedTime ?? null;
-    const difficulty = result.difficulty ?? null;
-    const timeReasoning = result.timeReasoning ?? null;
-    const difficultyReasoning = result.difficultyReasoning ?? null;
     const localImageUrl = result.imageUrl ? await downloadAndSaveImage(result.imageUrl) : '';
 
     const sourceUrlNormalized = (job.url || '').trim().replace(/\/$/, '') || null;
@@ -278,7 +273,7 @@ export async function saveImportedRecipe(req: Request, res: Response) {
           data: {
             recipeId: existingRecipe.id,
             title,
-            description,
+            description: '',
             ingredients,
             instructions,
             imageUrl: localImageUrl,
@@ -290,12 +285,12 @@ export async function saveImportedRecipe(req: Request, res: Response) {
           data: {
             currentVersionId: version.id,
             title,
-            description,
+            description: '',
             imageUrl: localImageUrl,
-            estimatedTime: cookTime,
-            difficulty,
-            timeReasoning,
-            difficultyReasoning,
+            estimatedTime: null,
+            difficulty: null,
+            timeReasoning: null,
+            difficultyReasoning: null,
           },
         });
         await ensureImportedTag(existingRecipe.id);
@@ -309,14 +304,14 @@ export async function saveImportedRecipe(req: Request, res: Response) {
       const recipe = await tx.recipe.create({
         data: {
           title,
-          description,
+          description: null,
           imageUrl: localImageUrl,
           sourceUrl: sourceUrlNormalized ?? job.url,
           userId: dbUser.id,
-          estimatedTime: cookTime,
-          difficulty,
-          timeReasoning,
-          difficultyReasoning,
+          estimatedTime: null,
+          difficulty: null,
+          timeReasoning: null,
+          difficultyReasoning: null,
         },
         include: { user: true },
       });
@@ -324,7 +319,7 @@ export async function saveImportedRecipe(req: Request, res: Response) {
         data: {
           recipeId: recipe.id,
           title,
-          description,
+          description: '',
           ingredients,
           instructions,
           imageUrl: localImageUrl,

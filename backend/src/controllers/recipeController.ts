@@ -374,13 +374,13 @@ export async function createRecipe(req: Request, res: Response) {
     const recipe = await prisma.recipe.create({
       data: {
         title,
-        description,
+        description: null,
         imageUrl: localImageUrl,
         userId: dbUser.id,
-        estimatedTime: cookTime, // Map cookTime to estimatedTime for database compatibility
-        difficulty,
-        timeReasoning,
-        difficultyReasoning,
+        estimatedTime: null,
+        difficulty: null,
+        timeReasoning: null,
+        difficultyReasoning: null,
       },
       include: {
         user: true,
@@ -392,7 +392,7 @@ export async function createRecipe(req: Request, res: Response) {
       data: {
         recipeId: recipe.id,
         title,
-        description: description || '',
+        description: '',
         ingredients: ingredients || '',
         instructions: instructions || '',
         imageUrl: localImageUrl,
@@ -472,7 +472,7 @@ export async function updateRecipe(req: Request, res: Response) {
           data: {
             recipeId: id,
             title: title ?? existingRecipe.title,
-            description: description ?? existingRecipe.description ?? '',
+            description: '',
             ingredients: ingredients ?? existingRecipe.currentVersion?.ingredients ?? '',
             instructions: instructions ?? existingRecipe.currentVersion?.instructions ?? '',
             imageUrl: localImageUrl ?? existingRecipe.currentVersion?.imageUrl ?? null,
@@ -483,10 +483,10 @@ export async function updateRecipe(req: Request, res: Response) {
           where: { id },
           data: {
             title: title ?? existingRecipe.title,
-            description: description ?? existingRecipe.description ?? null,
+            description: null,
             imageUrl: localImageUrl ?? existingRecipe.imageUrl ?? null,
-            estimatedTime: cookTime ?? existingRecipe.estimatedTime ?? null,
-            difficulty: difficulty ?? existingRecipe.difficulty ?? null,
+            estimatedTime: null,
+            difficulty: null,
             currentVersionId: newVersion.id,
           },
         });
@@ -504,10 +504,10 @@ export async function updateRecipe(req: Request, res: Response) {
         where: { id },
         data: {
           title,
-          description,
+          description: null,
           imageUrl: localImageUrl ?? null,
-          estimatedTime: cookTime,
-          difficulty,
+          estimatedTime: null,
+          difficulty: null,
           ...(ver ? { currentVersionId: ver.id } : {}),
         },
       });
@@ -516,7 +516,7 @@ export async function updateRecipe(req: Request, res: Response) {
           where: { id: ver.id },
           data: {
             title,
-            description: description || '',
+            description: '',
             ingredients: ingredients || '',
             instructions: instructions || '',
             imageUrl: localImageUrl ?? null,
@@ -683,7 +683,7 @@ export async function deleteRecipeVersion(req: Request, res: Response) {
           data: {
             currentVersionId: nextVersion.id,
             title: nextVersion.title ?? recipe.title,
-            description: nextVersion.description ?? recipe.description,
+            description: null,
             imageUrl: nextVersion.imageUrl ?? null,
           },
         });

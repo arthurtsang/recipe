@@ -1,64 +1,20 @@
 import React from 'react';
-import { Card, CardContent, CardMedia, Typography, Box, CardActionArea, Rating, Chip, Tooltip } from '@mui/material';
+import { Card, CardContent, CardMedia, Typography, Box, CardActionArea } from '@mui/material';
 import { Link } from 'react-router-dom';
 
-import { AccessTime, Person } from '@mui/icons-material';
+import { Person } from '@mui/icons-material';
 import { recipeImageSrc } from '../utils/recipeImageSrc';
 
 type RecipeCardProps = {
   recipe: {
     id: string;
     title: string;
-    description?: string;
     imageUrl?: string;
     user?: { name?: string | null; email: string; alias?: string | null; displayName?: string };
-    averageRating?: number | null;
-    estimatedTime?: string;
-    difficulty?: string;
-    timeReasoning?: string;
-    difficultyReasoning?: string;
-    versions?: Array<{
-      ingredients: string;
-      instructions: string;
-    }>;
   };
 };
 
-function formatEstimatedTime(estimatedTime?: string): string | null {
-  if (!estimatedTime || !String(estimatedTime).trim()) return null;
-  const minutes = parseInt(String(estimatedTime), 10);
-  if (Number.isNaN(minutes) || minutes <= 0) return null;
-  const hours = Math.floor(minutes / 60);
-  const remainingMins = minutes % 60;
-  if (hours > 0 && remainingMins === 0) return `${hours}h 0m`;
-  if (hours > 0) return `${hours}h ${remainingMins}m`;
-  return `0h ${minutes}m`;
-}
-
 const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
-  const getIngredientCount = () => {
-    if (!recipe.versions || recipe.versions.length === 0) return 0;
-    const ingredients = recipe.versions[0].ingredients || '';
-    const lines = ingredients.split('\n').filter(line => line.trim());
-    return lines.filter(line => {
-      const trimmed = line.trim();
-      return trimmed &&
-             !/^\d+\.?\s*$/.test(trimmed) &&
-             !/^[\u2022\-\*]\s*$/.test(trimmed) &&
-             !/^(ingredients?|for|serves?|yield|makes?):/i.test(trimmed);
-    }).length;
-  };
-
-  const getInstructionCount = () => {
-    if (!recipe.versions || recipe.versions.length === 0) return 0;
-    const instructions = recipe.versions[0].instructions || '';
-    return instructions.split('\n').filter(line => line.trim()).length;
-  };
-
-  const ingredientCount = getIngredientCount();
-  const instructionCount = getInstructionCount();
-  const estimatedTime = formatEstimatedTime(recipe.estimatedTime);
-
   const imageSrc = recipe.imageUrl ? recipeImageSrc(recipe.imageUrl) : undefined;
 
   return (
@@ -84,38 +40,6 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
           <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, lineHeight: 1.2 }}>
             {recipe.title}
           </Typography>
-
-          {typeof recipe.averageRating === 'number' && (
-            <Box display="flex" alignItems="center" mb={1.5}>
-              <Rating value={recipe.averageRating} precision={0.1} readOnly size="small" />
-              <Typography variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
-                {recipe.averageRating.toFixed(1)}
-              </Typography>
-            </Box>
-          )}
-
-          {estimatedTime && (
-            <Box sx={{ mb: 1.5 }}>
-              <Tooltip title={recipe.timeReasoning || ''} placement="top" arrow>
-                <Chip icon={<AccessTime />} label={estimatedTime} size="small" variant="outlined" color="primary" />
-              </Tooltip>
-            </Box>
-          )}
-
-          <Box sx={{ mb: 1.5 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-              {instructionCount} steps • {ingredientCount} ingredients
-            </Typography>
-            {recipe.description ? (
-              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.4 }}>
-                {recipe.description}
-              </Typography>
-            ) : (
-              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                Click to view full recipe details
-              </Typography>
-            )}
-          </Box>
 
           {imageSrc && (
             <Box mb={1.5} display="flex" justifyContent="center">

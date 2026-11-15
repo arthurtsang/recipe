@@ -191,25 +191,27 @@ export async function findRecipesNeedingAnalysis(limit: number = 10): Promise<st
 
 export async function processRecipeAnalysisQueue(): Promise<void> {
   try {
-    console.log('[recipe-analysis] Starting recipe analysis queue processing...');
-    const recipeIds = await findRecipesNeedingAnalysis(1);
-    if (recipeIds.length === 0) {
-      console.log('[recipe-analysis] No recipes need analysis');
-      return;
-    }
-    const recipeId = recipeIds[0];
-    console.log(`[recipe-analysis] Processing 1 recipe: ${recipeId}`);
-    await analyzeRecipeWithAI(recipeId);
-    console.log('[recipe-analysis] Recipe analysis queue processing complete');
+    await prisma.recipe.updateMany({
+      data: {
+        description: null,
+        estimatedTime: null,
+        difficulty: null,
+        timeReasoning: null,
+        difficultyReasoning: null,
+      },
+    });
+    await prisma.recipeVersion.updateMany({ data: { description: '' } });
+    await prisma.rating.deleteMany({});
   } catch (error) {
-    console.error('[recipe-analysis] Error processing recipe analysis queue:', error);
+    console.error('[recipe-analysis] Error clearing removed recipe fields:', error);
   }
 }
 
 export function startRecipeAnalysisScheduler(): void {
+  void processRecipeAnalysisQueue();
   const interval = 5 * 60 * 1000;
   setInterval(async () => {
     await processRecipeAnalysisQueue();
   }, interval);
-  console.log('[recipe-analysis] Recipe analysis scheduler started (every 5 minutes)');
+  console.log('[recipe-analysis] Removed-field cleanup scheduled');
 }

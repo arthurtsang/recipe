@@ -18,7 +18,6 @@ const RecipeForm: React.FC<{ user: User | null }> = ({ user }) => {
   const isEdit = Boolean(id);
 
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
   const [ingredients, setIngredients] = useState('');
   const [instructions, setInstructions] = useState('');
   const [imageUrl, setImageUrl] = useState('');
@@ -37,7 +36,6 @@ const RecipeForm: React.FC<{ user: User | null }> = ({ user }) => {
         })
         .then(data => {
           setTitle(data.title || '');
-          setDescription(data.description || '');
           setIngredients(data.versions?.[0]?.ingredients || '');
           setInstructions(data.versions?.[0]?.instructions || '');
           const imgUrl = data.imageUrl || data.versions?.[0]?.imageUrl || '';
@@ -91,7 +89,7 @@ const RecipeForm: React.FC<{ user: User | null }> = ({ user }) => {
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: title.trim(), description, ingredients, instructions, imageUrl }),
+        body: JSON.stringify({ title: title.trim(), description: '', ingredients, instructions, imageUrl }),
         credentials: 'include',
       });
       if (!res.ok) {
@@ -124,7 +122,6 @@ const RecipeForm: React.FC<{ user: User | null }> = ({ user }) => {
       <Typography variant="h5" gutterBottom sx={{ textAlign: 'center', mb: 2 }}>{isEdit ? t('editRecipe') : t('addRecipe')}</Typography>
       <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <TextField label="Title" value={title} onChange={e => setTitle(e.target.value)} required />
-        <TextField label="Description" value={description} onChange={e => setDescription(e.target.value)} multiline />
         <TextField label="Ingredients" value={ingredients} onChange={e => setIngredients(e.target.value)} multiline minRows={4} helperText="Optional if instructions are provided. Markdown supported." />
         <TextField label="Instructions" value={instructions} onChange={e => setInstructions(e.target.value)} multiline minRows={6} helperText="Optional if ingredients are provided. Markdown supported." />
         <Box>

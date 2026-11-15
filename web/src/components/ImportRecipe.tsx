@@ -514,12 +514,6 @@ const ImportRecipe: React.FC<ImportRecipeProps> = ({ open, onClose }) => {
                   <Typography variant="h6" gutterBottom>
                     {recipe.title}
                   </Typography>
-                  
-                  {recipe.description && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      {recipe.description}
-                    </Typography>
-                  )}
 
                   {recipe.imageUrl && (
                     <Box sx={{ mb: 2, textAlign: 'center' }}>
@@ -542,32 +536,6 @@ const ImportRecipe: React.FC<ImportRecipeProps> = ({ open, onClose }) => {
                       />
                     </Box>
                   )}
-
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
-                    {recipe.cookTime && (
-                      <Typography variant="caption" color="text.secondary">
-                        Cook Time: {(() => {
-                          const minutes = parseInt(recipe.cookTime);
-                          if (minutes >= 60) {
-                            const hours = Math.floor(minutes / 60);
-                            const remainingMins = minutes % 60;
-                            if (remainingMins === 0) {
-                              return `${hours}h`;
-                            } else {
-                              return `${hours}h ${remainingMins}m`;
-                            }
-                          } else {
-                            return `${minutes}m`;
-                          }
-                        })()}
-                      </Typography>
-                    )}
-                    {recipe.difficulty && (
-                      <Typography variant="caption" color="text.secondary">
-                        Difficulty: {recipe.difficulty}
-                      </Typography>
-                    )}
-                  </Box>
 
                   <Button
                     variant="contained"
