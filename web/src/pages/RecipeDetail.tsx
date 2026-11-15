@@ -636,10 +636,9 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       }
       return { shown, original: '', ingredient: shown, scaled: '', qtyStart: 0, qtyEnd: 0, ingStart: 0 };
     };
-    const splitLines = String(current ?? '').replace(/\r\n/g, '\n').split('\n');
-    const sourceLines = splitLines.length === 1 && splitLines[0] === '' ? [] : splitLines;
-    const shownLines = sourceLines.map((raw) => raw.replace(/^\s*[-*+]\s+/, ''));
-    const lineMasks = otherTexts ? masksForLines(shownLines, otherTexts.map((text) => String(text ?? '').replace(/\r\n/g, '\n').split('\n').map((line) => line.replace(/^\s*[-*+]\s+/, '')).join('\n'))) : null;
+    const compactLines = (text: string) => String(text ?? '').replace(/\r\n/g, '\n').split('\n').map((line) => line.replace(/^\s*[-*+]\s+/, '').trim()).filter(Boolean);
+    const sourceLines = compactLines(String(current ?? ''));
+    const lineMasks = otherTexts ? masksForLines(sourceLines, otherTexts.map((text) => compactLines(text).join('\n'))) : null;
     const rows = sourceLines.map((raw) => ({ ...parseLine(raw), raw }));
     if (editing) rows.push({ original: '', scaled: '', ingredient: '', raw: '', shown: '', qtyStart: 0, qtyEnd: 0, ingStart: 0 });
 
@@ -651,7 +650,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       const qty = parsed.original.trim();
       const name = parsed.ingredient.trim();
       next[index] = qty && name ? `${qty} ${name}` : qty || name;
-      handleFieldChange('ingredients', next.join('\n').replace(/\n+$/, ''));
+      handleFieldChange('ingredients', next.map((line) => line.trim()).filter(Boolean).join('\n'));
     };
 
     const fieldStyle = (text: string): React.CSSProperties => ({
