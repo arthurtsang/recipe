@@ -10,6 +10,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { recipeImageSrc } from '../utils/recipeImageSrc';
+import { QTY_SRC, canonicalQty, formatQty, hyphenateMixedFractions, normalizeIngredientText, parseQtyToken, shouldScaleQty } from '../utils/ingredientFormat';
 
 interface User {
   id: string;
@@ -200,7 +201,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   const handleSave = async () => {
     if (!editFields) return;
     try {
-      const payload = { ...editFields, createNewVersion: false, versionId: selectedVersion.id, cookTime: recipe?.estimatedTime, difficulty: recipe?.difficulty };
+      const payload = { ...editFields, ingredients: normalizeIngredientText(editFields.ingredients || ''), createNewVersion: false, versionId: selectedVersion.id, cookTime: recipe?.estimatedTime, difficulty: recipe?.difficulty };
       const res = await fetch(`/api/recipes/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -239,7 +240,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     setNewVariationOpen(false);
     if (!editFields || !newVariationName.trim()) return;
     try {
-      const payload = { ...editFields, versionName: newVariationName.trim(), createNewVersion: true, cookTime: recipe?.estimatedTime, difficulty: recipe?.difficulty };
+      const payload = { ...editFields, ingredients: normalizeIngredientText(editFields.ingredients || ''), versionName: newVariationName.trim(), createNewVersion: true, cookTime: recipe?.estimatedTime, difficulty: recipe?.difficulty };
       const res = await fetch(`/api/recipes/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -408,14 +409,14 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   const wordKey = (word: string) => word.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
 
   const tokenSpans = (text: string) => {
-    const re = /(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:[.,]\d+)?|[½⅓⅔¼¾⅛⅜⅝⅞])|([\p{L}]+)|([^\p{L}\p{N}\s]+)/gu;
+    const re = new RegExp(`(${QTY_SRC})|([\\p{L}]+)|([^\\p{L}\\p{N}\\s]+)`, 'gu');
     const spans: { key: string; start: number; end: number }[] = [];
     let match: RegExpExecArray | null;
     while ((match = re.exec(text))) {
       const raw = match[0];
       if (/^\s+$/.test(raw)) continue;
       const key = match[1]
-        ? match[1].toLowerCase().replace(/\s+/g, ' ')
+        ? canonicalQty(match[1])
         : match[2]
           ? wordKey(match[2])
           : raw;
@@ -565,58 +566,8 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     );
   };
 
-  const parseQtyToken = (token: string) => {
-    const unicode: Record<string, number> = { '½': 1 / 2, '⅓': 1 / 3, '⅔': 2 / 3, '¼': 1 / 4, '¾': 3 / 4, '⅛': 1 / 8, '⅜': 3 / 8, '⅝': 5 / 8, '⅞': 7 / 8 };
-    const t = token.trim();
-    if (unicode[t] != null) return unicode[t];
-    const mixed = t.match(/^(\d+)\s+(\d+)\/(\d+)$/);
-    if (mixed) {
-      const den = Number(mixed[3]);
-      return den ? Number(mixed[1]) + Number(mixed[2]) / den : null;
-    }
-    const frac = t.match(/^(\d+)\/(\d+)$/);
-    if (frac) {
-      const den = Number(frac[2]);
-      return den ? Number(frac[1]) / den : null;
-    }
-    const n = Number(t.replace(',', '.'));
-    return Number.isFinite(n) ? n : null;
-  };
-
-  const formatQty = (n: number) => {
-    if (!Number.isFinite(n)) return '';
-    const nearest = Math.round(n);
-    if (Math.abs(n - nearest) < 0.001) return String(nearest);
-    const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
-    for (let den = 2; den <= 16; den += 1) {
-      const num = Math.round(n * den);
-      if (Math.abs(n - num / den) < 0.02) {
-        const whole = Math.trunc(num / den);
-        const rem = Math.abs(num % den);
-        if (rem === 0) return String(whole);
-        const g = gcd(rem, den);
-        const frac = `${rem / g}/${den / g}`;
-        return whole > 0 ? `${whole} ${frac}` : frac;
-      }
-    }
-    return String(Math.round(n * 100) / 100);
-  };
-
-  const shouldScaleQty = (line: string, index: number, token: string) => {
-    const before = line.slice(0, index);
-    const after = line.slice(index + token.length);
-    if (/[A-Za-z0-9/]$/.test(before)) return false;
-    if (/[x×]\s*$/i.test(before)) return false;
-    if (/^\s*$/.test(before) && /^\s*[.)]/.test(after)) return false;
-    const rest = after.trimStart();
-    if (/^(?:inch(?:es)?|°|degrees?|minutes?|hours?|seconds?)\b/i.test(rest)) return false;
-    if (/^°/.test(rest)) return false;
-    if (/^\s*x\s*\d/i.test(after)) return false;
-    return true;
-  };
-
   const renderIngredientColumns = (current: string | undefined, otherTexts: string[] | null, multiplier: number, showAdjusted: boolean, editing: boolean) => {
-    const qtyRe = /(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:[.,]\d+)?|[½⅓⅔¼¾⅛⅜⅝⅞])/g;
+    const qtyRe = new RegExp(QTY_SRC, 'g');
     const unitRe = /^(?:cups?|c|tbsps?|tablespoons?|tbs|tsps?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|l|liters?|litres?|pinch(?:es)?|cloves?|cans?|packages?|pkg|slices?|pieces?|bunch(?:es)?|sprigs?|heads?|stalks?|sheets?|sticks?|dash(?:es)?|handfuls?|quarts?|pints?|gallons?)$/i;
     const parseLine = (raw: string) => {
       const shown = raw.replace(/^\s*[-*+]\s+/, '');
@@ -641,7 +592,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       }
       return { shown, original: '', ingredient: shown, scaled: '', qtyStart: 0, qtyEnd: 0, ingStart: 0 };
     };
-    const compactLines = (text: string) => String(text ?? '').replace(/\r\n/g, '\n').split('\n').map((line) => line.replace(/^\s*[-*+]\s+/, '').trim()).filter(Boolean);
+    const compactLines = (text: string) => String(text ?? '').replace(/\r\n/g, '\n').split('\n').map((line) => line.replace(/^\s*[-*+]\s+/, '').trim()).filter(Boolean).map((line) => (editing ? line : hyphenateMixedFractions(line)));
     const sourceLines = compactLines(String(current ?? ''));
     const lineMasks = otherTexts ? masksForLines(sourceLines, otherTexts.map((text) => compactLines(text).join('\n'))) : null;
     const rows = sourceLines.map((raw) => ({ ...parseLine(raw), raw }));

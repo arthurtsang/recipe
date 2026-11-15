@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Box, Typography, TextField, Button, Paper } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { recipeImageSrc } from '../utils/recipeImageSrc';
+import { normalizeIngredientText } from '../utils/ingredientFormat';
 
 interface User {
   id: string;
@@ -89,7 +90,7 @@ const RecipeForm: React.FC<{ user: User | null }> = ({ user }) => {
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: title.trim(), description: '', ingredients, instructions, imageUrl }),
+        body: JSON.stringify({ title: title.trim(), description: '', ingredients: normalizeIngredientText(ingredients), instructions, imageUrl }),
         credentials: 'include',
       });
       if (!res.ok) {
