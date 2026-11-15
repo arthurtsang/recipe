@@ -42,7 +42,10 @@ export async function getAllPublicRecipes(q?: string, page: number = 1, limit: n
         select: { value: true }
       },
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [
+      { lastViewedAt: { sort: 'desc', nulls: 'last' } },
+      { createdAt: 'desc' },
+    ],
     skip: (page - 1) * limit,
     take: limit,
   });
@@ -69,6 +72,7 @@ export async function getRecipeById(id: string) {
     },
   });
   if (!recipe) return null;
+  await prisma.$executeRaw`UPDATE "metrobistro"."Recipe" SET "lastViewedAt" = NOW() WHERE "id" = ${id}`.catch(() => undefined);
   const user = recipe.user ? { ...recipe.user, displayName: userDisplayName(recipe.user) } : recipe.user;
   return { ...recipe, user };
 }
@@ -218,7 +222,10 @@ export async function searchRecipesByKeywords(keywords: string[], page: number =
         take: 1,
       },
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [
+      { lastViewedAt: { sort: 'desc', nulls: 'last' } },
+      { createdAt: 'desc' },
+    ],
     skip: (page - 1) * limit,
     take: limit,
   });
@@ -253,7 +260,10 @@ export async function getRecipesByUserId(userId: string, isOwner: boolean) {
         take: 1,
       },
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [
+      { lastViewedAt: { sort: 'desc', nulls: 'last' } },
+      { createdAt: 'desc' },
+    ],
   });
   return recipes.map((r: any) => {
     const averageRating = r.ratings.length
