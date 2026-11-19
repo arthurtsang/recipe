@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
 import { Paper, Typography, Box, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Checkbox, Alert, Slide, Link, CircularProgress, Chip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
@@ -68,6 +68,8 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     try { return localStorage.getItem('recipeHighlightDiffs') === '1'; } catch { return false; }
   });
   const [isEditing, setIsEditing] = useState(false);
+  const ingredientDraftRef = useRef<{ qty: string; name: string }[] | null>(null);
+  const [draftTick, setDraftTick] = useState(0);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [originalFields, setOriginalFields] = useState<Version | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -158,6 +160,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
   };
 
   const handleEdit = () => {
+    ingredientDraftRef.current = null;
     setIsEditing(true);
     setOriginalFields(editFields);
     setImagePreview(null);
@@ -593,6 +596,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       }
       return { shown, original: '', ingredient: shown, scaled: '', qtyStart: 0, qtyEnd: 0, ingStart: 0 };
     };
+    const draftRows = draftTick >= 0 ? ingredientDraftRef.current : null;
     const compactLines = (text: string) => String(text ?? '').replace(/\r\n/g, '\n').split('\n').map((line) => line.replace(/^\s*[-*+]\s+/, '').trim()).filter(Boolean).map((line) => (editing ? line : hyphenateMixedFractions(line)));
     const sourceLines = compactLines(String(current ?? ''));
     const lineMasks = otherTexts ? masksForLines(sourceLines, otherTexts.map((text) => compactLines(text).join('\n'))) : null;
@@ -600,14 +604,26 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
     if (editing) rows.push({ original: '', scaled: '', ingredient: '', raw: '', shown: '', qtyStart: 0, qtyEnd: 0, ingStart: 0 });
 
     const writeRow = (index: number, field: 'original' | 'ingredient', value: string) => {
-      const next = sourceLines.slice();
-      while (next.length <= index) next.push('');
-      const parsed = parseLine(next[index] ?? '');
-      parsed[field] = value;
-      const qty = parsed.original.trim();
-      const name = parsed.ingredient.trim();
-      next[index] = qty && name ? `${qty} ${name}` : qty || name;
-      handleFieldChange('ingredients', next.map((line) => line.trim()).filter(Boolean).join('\n'));
+      let draft = ingredientDraftRef.current;
+      if (!draft) {
+        draft = sourceLines.map((raw) => {
+          const parsed = parseLine(raw);
+          return { qty: parsed.original, name: parsed.ingredient };
+        });
+        draft.push({ qty: '', name: '' });
+      }
+      while (draft.length <= index) draft.push({ qty: '', name: '' });
+      draft[index] = {
+        ...draft[index],
+        [field === 'original' ? 'qty' : 'name']: value,
+      };
+      ingredientDraftRef.current = draft;
+      setDraftTick((tick) => tick + 1);
+      handleFieldChange('ingredients', draft.map((row) => {
+        const qty = row.qty.trim();
+        const name = row.name.trim();
+        return qty && name ? `${qty} ${name}` : qty || name;
+      }).filter(Boolean).join('\n'));
     };
 
     const fieldStyle = (text: string): React.CSSProperties => ({
@@ -627,12 +643,15 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
       <Box sx={{ display: 'grid', gridTemplateColumns: showAdjusted ? 'max-content max-content minmax(0, 1fr)' : 'max-content minmax(0, 1fr)', columnGap: '0.6rem', rowGap: 0.25, justifyItems: 'start', alignItems: 'baseline' }}>
         {rows.map((row, i) => {
           const mask = lineMasks?.[i] ?? null;
+          const draft = draftRows?.[i];
+          const qtyValue = editing && draft ? draft.qty : row.original;
+          const nameValue = editing && draft ? draft.name : row.ingredient;
           const ingredientNode = editing ? (
             <input
-              value={row.ingredient}
+              value={nameValue}
               onChange={(e) => writeRow(i, 'ingredient', e.target.value)}
               placeholder={i === rows.length - 1 ? 'Ingredient' : ''}
-              style={{ ...fieldStyle(row.ingredient || 'Ingredient'), width: '100%' }}
+              style={{ ...fieldStyle(nameValue || 'Ingredient'), width: '100%' }}
             />
           ) : !row.ingredient ? '\u00a0' : renderMasked(row.ingredient, mask ? mask.slice(row.ingStart, row.ingStart + row.ingredient.length) : null);
           return (
@@ -644,10 +663,10 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
               )}
               {editing ? (
                 <input
-                  value={row.original}
+                  value={qtyValue}
                   onChange={(e) => writeRow(i, 'original', e.target.value)}
                   placeholder="Qty"
-                  style={{ ...fieldStyle(row.original || 'Qty'), minWidth: '8ch' }}
+                  style={{ ...fieldStyle(qtyValue || 'Qty'), minWidth: '8ch' }}
                 />
               ) : (
                 <Box component="div" sx={{ fontSize: 16, whiteSpace: 'nowrap', width: 'max-content' }}>
