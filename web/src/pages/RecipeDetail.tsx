@@ -10,7 +10,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { recipeImageSrc } from '../utils/recipeImageSrc';
-import { QTY_SRC, canonicalQty, formatQty, hyphenateMixedFractions, normalizeIngredientText, parseQtyToken, shouldScaleQty } from '../utils/ingredientFormat';
+import { QTY_SRC, canonicalQty, formatQty, hyphenateMixedFractions, isQtyUnit, normalizeIngredientText, parseQtyToken, shouldScaleQty } from '../utils/ingredientFormat';
 
 interface User {
   id: string;
@@ -568,7 +568,6 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
 
   const renderIngredientColumns = (current: string | undefined, otherTexts: string[] | null, multiplier: number, showAdjusted: boolean, editing: boolean) => {
     const qtyRe = new RegExp(QTY_SRC, 'g');
-    const unitRe = /^(?:cups?|c|tbsps?|tablespoons?|tbs|tsps?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|l|liters?|litres?|pinch(?:es)?|cloves?|cans?|packages?|pkg|slices?|pieces?|bunch(?:es)?|sprigs?|heads?|stalks?|sheets?|sticks?|dash(?:es)?|handfuls?|quarts?|pints?|gallons?)$/i;
     const parseLine = (raw: string) => {
       const shown = raw.replace(/^\s*[-*+]\s+/, '');
       qtyRe.lastIndex = 0;
@@ -577,12 +576,14 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
         if (!shouldScaleQty(shown, match.index, match[0])) continue;
         if (shown.slice(0, match.index).trim()) break;
         const after = shown.slice(match.index + match[0].length);
-        const unitMatch = after.match(/^\s*([A-Za-z][A-Za-z.]*)/);
-        const unit = unitMatch && unitRe.test(unitMatch[1]) ? unitMatch[1] : '';
+        const trimmedAfter = after.trimStart();
+        const wordMatch = trimmedAfter.match(/^([A-Za-z][A-Za-z.]*)/);
+        const word = wordMatch?.[1] ?? '';
+        const unit = word && isQtyUnit(word) ? word : '';
         const qtyStart = match.index;
         let qtyEnd = match.index + match[0].length;
-        if (unit && unitMatch) {
-          qtyEnd = match.index + match[0].length + after.indexOf(unitMatch[1]) + unit.length;
+        if (unit && wordMatch) {
+          qtyEnd = match.index + match[0].length + after.indexOf(wordMatch[1]) + word.length;
         }
         let ingStart = qtyEnd;
         while (ingStart < shown.length && /\s/.test(shown[ingStart])) ingStart += 1;
@@ -646,7 +647,7 @@ const RecipeDetail: React.FC<{ user: User | null }> = ({ user }) => {
                   value={row.original}
                   onChange={(e) => writeRow(i, 'original', e.target.value)}
                   placeholder="Qty"
-                  style={fieldStyle(row.original || 'Qty')}
+                  style={{ ...fieldStyle(row.original || 'Qty'), minWidth: '8ch' }}
                 />
               ) : (
                 <Box component="div" sx={{ fontSize: 16, whiteSpace: 'nowrap', width: 'max-content' }}>

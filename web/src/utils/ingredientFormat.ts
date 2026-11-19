@@ -15,7 +15,31 @@ const FRAC_CHARS = Object.keys(FRAC_VALUE).join('');
 /** A quantity: mixed (1-1/2, 1 1/2, 1½), fraction, unicode fraction, or decimal. No capturing groups. */
 export const QTY_SRC = `\\d+\\s*[- ]\\s*\\d+\\s*/\\s*\\d+|\\d+\\s*[${FRAC_CHARS}]|\\d+\\s*/\\s*\\d+|[${FRAC_CHARS}]|\\d+(?:[.,]\\d+)?`;
 
-const UNIT_SRC = 'cups?|c|tbsps?|tablespoons?|tbs|tsps?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|l|liters?|litres?|pinch(?:es)?|cloves?|cans?|packages?|pkg|slices?|pieces?|bunch(?:es)?|sprigs?|heads?|stalks?|sheets?|sticks?|dash(?:es)?|handfuls?|quarts?|pints?|gallons?';
+const UNIT_SRC = 'cups?|c|tbsps?|tablespoons?|tbs|tb|tsps?|teaspoons?|tsp|ts|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|milliliters?|l|liters?|litres?|pinch(?:es)?|cloves?|cans?|packages?|pkg|slices?|pieces?|bunch(?:es)?|sprigs?|heads?|stalks?|sheets?|sticks?|dash(?:es)?|handfuls?|quarts?|pints?|gallons?';
+
+const UNIT_WORDS = [
+  'cup', 'cups', 'c',
+  'tablespoon', 'tablespoons', 'tbsp', 'tbs', 'tb',
+  'teaspoon', 'teaspoons', 'tsp', 'ts',
+  'ounce', 'ounces', 'oz',
+  'pound', 'pounds', 'lb', 'lbs',
+  'gram', 'grams', 'g', 'kilogram', 'kilograms', 'kg',
+  'milliliter', 'milliliters', 'ml', 'liter', 'liters', 'litre', 'litres', 'l',
+  'pinch', 'pinches', 'clove', 'cloves',
+  'can', 'cans', 'package', 'packages', 'pkg',
+  'slice', 'slices', 'piece', 'pieces',
+  'bunch', 'bunches', 'sprig', 'sprigs',
+  'head', 'heads', 'stalk', 'stalks',
+  'sheet', 'sheets', 'stick', 'sticks',
+  'dash', 'dashes', 'handful', 'handfuls',
+  'quart', 'quarts', 'pint', 'pints', 'gallon', 'gallons',
+];
+
+export const isQtyUnit = (word: string) => {
+  const w = word.toLowerCase().replace(/\.$/, '');
+  if (!w || !/^[a-z]+$/.test(w)) return false;
+  return UNIT_WORDS.some((unit) => unit === w || (w.length < unit.length && unit.startsWith(w)));
+};
 
 const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
 
